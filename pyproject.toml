@@ -1,0 +1,31 @@
+[build-system]
+requires = ["hatchling>=1.25"]
+build-backend = "hatchling.build"
+
+[project]
+name = "evo-wiki"
+version = "0.1.0"
+description = "Claude Code-first LLM Wiki knowledge platform development tool"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [{ name = "Evo wiki contributors" }]
+dependencies = [
+  "lightrag-hku>=1.4.0",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8.0",
+]
+
+[project.scripts]
+evo-wiki = "evo_wiki.cli:main"
+evo = "evo_wiki.cli:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/evo_wiki"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]

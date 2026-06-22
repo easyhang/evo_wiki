@@ -1,0 +1,34 @@
+.venv/
+.claude/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+dist/
+build/
+*.egg-info/
+.DS_Store
+
+# Default local Evo wiki runtime workspace.
+# Keeps corpus, artifacts, project.json, wiki.json and generated outputs separate from tool code.
+workspace/
+
+# Legacy/safety ignores in case --root . is explicitly used in this repository
+/artifacts/
+/corpus/
+/corpus-txt/
+/project.json
+/wiki.json
+
+# Example run outputs; keep example corpus and wiki-src source files versionable
+examples/basic/artifacts/wiki/dist/
+examples/basic/artifacts/wiki/reports/
+examples/basic/artifacts/wiki/state/
+examples/basic/artifacts/lightrag/input/
+examples/basic/artifacts/lightrag/reports/
+examples/basic/artifacts/lightrag/state/
+examples/basic/artifacts/lightrag/workspace/
+examples/basic/artifacts/docker/
+examples/basic/artifacts/agent/
+examples/basic/artifacts/manifest.json
+examples/basic/artifacts/wiki/manifest.json
+examples/basic/artifacts/corpus-state.json
