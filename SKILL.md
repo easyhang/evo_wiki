@@ -4,7 +4,8 @@ description: |
   Evo wiki 是面向 Claude Code 的 LLM Wiki 知识平台开发工具。用于将 corpus/ 原始语料按需转换为
   人可读的静态 Wiki、LightRAG GraphRAG 知识库，或二者的分离式组合。Claude Code 主导理解、
   决策、Wiki 内容生成与结果解释；Python 工具只负责确定性的 artifacts 管理、扫描、渲染、
-  LightRAG 调用、报告和 Docker 导出。使用时必须保持 Wiki lane 与 LightRAG lane 完全分离，
+  LightRAG 调用、报告和 Docker 导出。Wiki 必须同步生成基于语料 community summary 的概念页与实体页，
+  严格依据语料、不得编造。使用时必须保持 Wiki lane 与 LightRAG lane 完全分离，
   并在复杂决策中使用结构化思考框架：收集上下文、区分已知/假设/未知、质疑前提、生成备选方案、
   对抗性压测、做出可审计决策。
 ---
@@ -134,14 +135,16 @@ Claude Code 必须负责：
    - `wiki_then_lightrag`
    - `both`
 3. 默认建议 Wiki-first，但尊重用户明确要求。
-4. 为 Wiki lane 规划页面结构。
-5. 基于原始语料生成或更新：
+4. 为 Wiki lane 规划页面结构（必须包含 `concepts/` 概念页与 `entities/` 实体页，而不只是首页和摘要页）。
+5. 基于原始语料生成或更新，且必须同步产出概念页与实体页：
 
 ```text
 workspace/artifacts/wiki/wiki-src/*.md
+workspace/artifacts/wiki/wiki-src/concepts/*.md
+workspace/artifacts/wiki/wiki-src/entities/*.md
 ```
 
-6. 写 Wiki 内容时必须来源约束，不编造无证据断言。
+6. 写 Wiki 内容时必须严格基于语料、做 community summary（社区摘要），不编造无证据断言（详见 §6.3.1）。
 7. 尽量保护用户手工编辑内容。
 8. 调用 Python 工具渲染 Wiki、准备 LightRAG、导出 Docker。
 9. 读取 reports 和 manifest 后再向用户总结。
@@ -538,6 +541,31 @@ sources:
 ## Open Questions
 ```
 
+### 6.3.1 强制要求：概念页 / 实体页必须基于语料社区摘要（community summary）
+
+Wiki lane 不能只产出 `index.md` 和 summary 页。**每次摄入语料后，必须同步抽取并生成对应的 `concepts/` 概念页与 `entities/` 实体页**，否则视为本次 Wiki 未完成。
+
+这些页面的内容生成必须遵循 **community summary（社区摘要）** 方法，并以语料为唯一事实来源：
+
+1. **先抽取、再聚类、最后摘要**：
+   - 从 `workspace/corpus/` 原始语料中抽取候选实体与概念（人物、工具、论文、组织、术语等）。
+   - 基于跨来源的共现与引用关系，把相关实体 / 概念归入同一「社区」（主题簇）。
+   - 对每个社区生成聚合摘要，作为概念页 / 实体页正文的基础；摘要必须综合**多篇来源的证据**，而不是单文照搬或逐句复制。
+
+2. **严格基于语料，禁止编造**：
+   - 页面中的每一条论断都必须能追溯到具体语料文件，并记录在 frontmatter `sources` 与 `## Sources` 中。
+   - 语料没有证据支撑的内容一律不写。宁可留空、写入 `## Open Questions`，或创建 open audit，也不要凭模型常识补全。
+   - 必须区分「语料中的事实」与「基于语料的合理推断」；推断要显式标注，不得伪装成事实。
+   - 只覆盖语料实际讨论到的范围，不要扩写成通用百科式定义。
+
+3. **覆盖与可审计**：
+   - 概念页 / 实体页之间用 `[[wikilink]]` 建立社区内与社区间的交叉引用。
+   - `evo-wiki lint-wiki` 报出的 `unlinked_concept`（潜在未建页概念）应作为「是否漏建概念页 / 实体页」的检查信号。
+   - 如果某概念 / 实体在语料中证据过弱（仅一处、缺上下文），应在页面中说明证据有限，而不是强行扩写。
+
+> 反模式：直接用模型常识写「护城河一般指……」这类百科定义。
+> 正确做法：基于 `corpus/raw/*.md` 中对该主题的实际论述做社区摘要，并在 `## Sources` 标注来源，只覆盖语料讨论到的部分。
+
 ### 6.4 核心操作模式
 
 这些操作由 Claude Code 通过对话执行，Python 只负责渲染和检查。
@@ -903,6 +931,12 @@ workspace/artifacts/lightrag/reports/lightrag-report.json
 错误：在可逆决策上无限讨论。
 
 正确：可逆动作快速执行，无法确认的高风险动作才询问。
+
+### 12.8 凭空生成概念页 / 实体页
+
+错误：用模型常识或通用百科知识填充 `concepts/` / `entities/` 页，或者干脆只生成首页和摘要页、漏掉概念页与实体页。
+
+正确：每次摄入语料后必须同步生成概念页与实体页，内容基于 `workspace/corpus/` 做 community summary，每条论断可追溯到来源；无证据则留空或标记 open question / audit（见 §6.3.1）。
 
 ---
 
