@@ -8,6 +8,9 @@ build/
 *.egg-info/
 .DS_Store
 
+# Locally copied planning artifact (wiki-graphrag-platform-plan/v3.html).
+design_v3.html
+
 # Default local Evo wiki runtime workspace.
 # Keeps corpus, artifacts, project.json, wiki.json and generated outputs separate from tool code.
 workspace/

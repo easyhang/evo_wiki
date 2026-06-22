@@ -12,7 +12,32 @@ def export_docker(paths: ProjectPaths) -> dict:
     (paths.docker / "lightrag.Dockerfile").write_text(LIGHTRAG_DOCKERFILE, encoding="utf-8")
     (paths.docker / "docker-compose.yml").write_text(compose(wiki_exists, lightrag_exists), encoding="utf-8")
     (paths.docker / "README.md").write_text(readme(wiki_exists, lightrag_exists), encoding="utf-8")
-    return {"wiki": wiki_exists, "lightrag": lightrag_exists, "path": str(paths.docker)}
+
+    # L3：构建上下文是项目根（context: ../..），不写 .dockerignore 会把 corpus/ 及缓存
+    # 全量发给 docker daemon。仅在缺失时生成，避免覆盖用户自定义文件。
+    dockerignore = paths.root / ".dockerignore"
+    dockerignore_written = False
+    if not dockerignore.exists():
+        dockerignore.write_text(DOCKERIGNORE, encoding="utf-8")
+        dockerignore_written = True
+
+    return {
+        "wiki": wiki_exists,
+        "lightrag": lightrag_exists,
+        "path": str(paths.docker),
+        "dockerignore_written": dockerignore_written,
+    }
+
+
+DOCKERIGNORE = """corpus/
+**/__pycache__/
+*.pyc
+.git/
+.venv/
+venv/
+.env
+.DS_Store
+"""
 
 
 WIKI_DOCKERFILE = """FROM nginx:1.27-alpine

@@ -23,7 +23,14 @@ def prepare_lightrag_input(paths: ProjectPaths, files: list[CorpusFile]) -> dict
         source = paths.root / item.path
         if not source.exists():
             continue
-        copied = files_dir / Path(item.path).relative_to("corpus")
+        # L2：item.path 通常形如 "corpus/raw/a.md"；若文件不在 corpus/ 下（异常布局），
+        # 退化为按原相对路径放置，避免 relative_to 抛 ValueError。
+        item_path = Path(item.path)
+        try:
+            rel = item_path.relative_to("corpus")
+        except ValueError:
+            rel = item_path
+        copied = files_dir / rel
         copied.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(source, copied)
         text = read_text_for_lightrag(source) if item.suffix in TEXT_SUFFIXES else ""
@@ -62,6 +69,14 @@ def build_lightrag(paths: ProjectPaths, *, smoke_query: str | None = None, dry_r
     previous = ledger.get("documents", {})
     imported = []
     skipped = []
+    # H1：检测「曾经导入过、但当前 corpus 已不再包含」的文档。LightRAG 无法保证从
+    # 已有图谱/向量中彻底删除旧知识，因此一旦发现删除，就必须诚实标记 requires_rebuild。
+    current_ids = {doc["id"] for doc in docs}
+    deleted = sorted(
+        meta.get("source_path", doc_id)
+        for doc_id, meta in previous.items()
+        if doc_id not in current_ids
+    )
 
     if dry_run:
         for doc in text_docs:
@@ -69,14 +84,14 @@ def build_lightrag(paths: ProjectPaths, *, smoke_query: str | None = None, dry_r
                 skipped.append(doc["source_path"])
             else:
                 imported.append(doc["source_path"])
-        report = base_report("dry_run", input_manifest, imported, skipped, None)
+        report = base_report("dry_run", input_manifest, imported, skipped, None, deleted=deleted)
         write_json(paths.lightrag_reports / "lightrag-report.json", report)
         return report
 
     try:
         from lightrag import LightRAG, QueryParam  # type: ignore
     except Exception as exc:  # pragma: no cover - environment dependent
-        report = base_report("failed", input_manifest, imported, skipped, f"Cannot import LightRAG: {exc}")
+        report = base_report("failed", input_manifest, imported, skipped, f"Cannot import LightRAG: {exc}", deleted=deleted)
         write_json(paths.lightrag_reports / "lightrag-report.json", report)
         raise LightRAGBuildError(report["error"]) from exc
 
@@ -93,19 +108,23 @@ def build_lightrag(paths: ProjectPaths, *, smoke_query: str | None = None, dry_r
                 "sha256": doc["sha256"],
                 "imported_at": utc_now(),
             }
+        # 把已从 corpus 删除的条目在 ledger 中标注出来（保留记录、但不再视为"已同步"）。
+        for doc_id, meta in previous.items():
+            if doc_id not in current_ids:
+                meta["removed_from_corpus"] = True
         smoke = None
         if smoke_query:
             smoke = rag.query(smoke_query, param=QueryParam(mode="hybrid"))
-            write_json(paths.lightrag / "queries" / "smoke-test.json", {"query": smoke_query, "answer": smoke})
+            write_json(paths.lightrag_queries / "smoke-test.json", {"query": smoke_query, "answer": smoke})
     except Exception as exc:  # pragma: no cover - depends on LLM/env config
-        report = base_report("failed", input_manifest, imported, skipped, str(exc))
+        report = base_report("failed", input_manifest, imported, skipped, str(exc), deleted=deleted)
         write_json(paths.lightrag_reports / "lightrag-report.json", report)
         raise LightRAGBuildError(report["error"]) from exc
 
     ledger["documents"] = previous
     ledger["updated_at"] = utc_now()
     write_json(paths.lightrag_state / "lightrag-import-ledger.json", ledger)
-    report = base_report("success", input_manifest, imported, skipped, None)
+    report = base_report("success", input_manifest, imported, skipped, None, deleted=deleted)
     report["smoke_test"] = {"query": smoke_query, "ran": bool(smoke_query)}
     write_json(paths.lightrag_reports / "lightrag-report.json", report)
     write_json(
@@ -120,14 +139,17 @@ def build_lightrag(paths: ProjectPaths, *, smoke_query: str | None = None, dry_r
     return report
 
 
-def base_report(status: str, input_manifest: dict, imported: list[str], skipped: list[str], error: str | None) -> dict:
+def base_report(status: str, input_manifest: dict, imported: list[str], skipped: list[str], error: str | None, *, deleted: list[str] | None = None) -> dict:
+    deleted = deleted or []
     return {
         "status": status,
         "generated_at": utc_now(),
         "input": input_manifest,
         "imported": imported,
         "skipped_unchanged": skipped,
-        "requires_rebuild": False,
+        # H1：删除无法被 LightRAG 增量安全清除，发现删除即要求全量重建。
+        "requires_rebuild": bool(deleted),
+        "deleted_pending_rebuild": deleted,
         "error": error,
     }
 

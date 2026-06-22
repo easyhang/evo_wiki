@@ -87,6 +87,24 @@ def current_scan(paths: ProjectPaths) -> tuple[list, dict]:
     return files, change_set
 
 
+def lane_state_path(paths: ProjectPaths, lane: str) -> Path:
+    """Per-lane corpus baseline path (H2).
+
+    每条 lane 维护各自的 corpus 基线，避免一条 lane 运行后把变更集"吃掉"，
+    导致另一条 lane 误判为无变更。
+    """
+    base = paths.wiki_state if lane == "wiki" else paths.lightrag_state
+    return base / "corpus-state.json"
+
+
+def merge_change_sets(change_sets: list[dict]) -> dict:
+    merged = {"added": set(), "modified": set(), "deleted": set()}
+    for change_set in change_sets:
+        for key in merged:
+            merged[key].update(change_set.get(key, []))
+    return {key: sorted(value) for key, value in merged.items()}
+
+
 def cmd_init(args: argparse.Namespace) -> int:
     paths, _ = load(args.root)
     paths.ensure_base_dirs()
@@ -104,7 +122,8 @@ def cmd_scan(args: argparse.Namespace) -> int:
     paths.ensure_base_dirs()
     files, change_set = current_scan(paths)
     persist_corpus_state(files, paths.artifacts / "corpus-state.json")
-    write_json(paths.agent / "delta-plan.json", {"selected_lanes": [], "change_set": change_set})
+    # L1：scan 只是预览，不应覆盖 run 写入的 delta-plan.json，改写独立的 scan.json。
+    write_json(paths.agent / "scan.json", {"selected_lanes": [], "change_set": change_set})
     print(json.dumps({"file_count": len(files), "change_set": change_set}, ensure_ascii=False, indent=2))
     return 0
 
@@ -167,31 +186,45 @@ def cmd_inspect(args: argparse.Namespace) -> int:
 def cmd_run(args: argparse.Namespace) -> int:
     paths, config = load(args.root)
     paths.ensure_base_dirs()
-    files, change_set = current_scan(paths)
+    files = scan_corpus(paths.root, paths.corpus)
     lanes = ["wiki", "lightrag"] if args.lane == "both" else [args.lane]
-    write_agent_plan(paths, selected_lanes=lanes, change_set=change_set, reason=f"cli_run_{args.lane}")
+    # H2：按 lane 各自的基线计算变更，互不污染。
+    lane_changes = {lane: diff_against_previous(files, lane_state_path(paths, lane)) for lane in lanes}
+    change_set = merge_change_sets(list(lane_changes.values()))
+    write_agent_plan(paths, selected_lanes=lanes, change_set=change_set, reason=f"cli_run_{args.lane}", change_sets=lane_changes)
 
     wiki_status = None
     lightrag_status = None
+    wiki_has_error = False
     summary = []
     if "wiki" in lanes:
         wiki_report = render_wiki(paths, config)
         wiki_status = {"status": wiki_report["status"], "output": "artifacts/wiki/dist/index.html", "page_count": wiki_report["page_count"]}
+        wiki_has_error = any(issue.get("severity") == "error" for issue in wiki_report.get("health", {}).get("issues", []))
         summary.append(f"Wiki lane: {wiki_report['status']} ({wiki_report['page_count']} pages)")
+        # 仅在该 lane 运行后持久化自己的基线。
+        persist_corpus_state(files, lane_state_path(paths, "wiki"))
     if "lightrag" in lanes:
         input_report = prepare_lightrag_input(paths, files)
         try:
             lr_report = build_lightrag(paths, smoke_query=args.smoke_query, dry_run=args.lightrag_dry_run)
             lightrag_status = {"status": lr_report["status"], "workspace": "artifacts/lightrag/workspace", "document_count": input_report["document_count"]}
             summary.append(f"LightRAG lane: {lr_report['status']} ({input_report['document_count']} docs)")
+            persist_corpus_state(files, lane_state_path(paths, "lightrag"))
         except LightRAGBuildError as exc:
             lightrag_status = {"status": "failed", "workspace": "artifacts/lightrag/workspace", "error": str(exc), "document_count": input_report["document_count"]}
             summary.append(f"LightRAG lane: failed ({exc})")
+    # 全局 corpus-state 仅作为 scan/inspect 的并集预览。
     persist_corpus_state(files, paths.artifacts / "corpus-state.json")
     write_top_manifest(paths, config, selected_lanes=lanes, files=files, change_set=change_set, wiki_status=wiki_status, lightrag_status=lightrag_status)
     write_run_summary(paths, summary)
     print("\n".join(summary))
-    return 0 if not (lightrag_status and lightrag_status.get("status") == "failed") else 2
+    # M3：退出码区分失败类型——lightrag 失败=2，wiki 存在 error 级健康问题=3，否则 0。
+    if lightrag_status and lightrag_status.get("status") == "failed":
+        return 2
+    if wiki_has_error:
+        return 3
+    return 0
 
 
 if __name__ == "__main__":

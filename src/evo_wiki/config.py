@@ -1,9 +1,25 @@
 from __future__ import annotations
 
+import copy
 from dataclasses import dataclass, field
 from pathlib import Path
 
 from .utils import read_json, write_json
+
+
+def deep_merge(base: dict, override: dict) -> dict:
+    """Recursively merge ``override`` into a copy of ``base`` (M4).
+
+    递归合并：仅当 base 和 override 中同一个键都是 dict 时才向下递归合并，
+    否则用 override 的值整体覆盖（列表/标量不做合并）。base 不会被修改。
+    """
+    result = copy.deepcopy(base)
+    for key, value in override.items():
+        if isinstance(value, dict) and isinstance(result.get(key), dict):
+            result[key] = deep_merge(result[key], value)
+        else:
+            result[key] = copy.deepcopy(value)
+    return result
 
 
 DEFAULT_PROJECT = {
@@ -58,8 +74,8 @@ class EvoConfig:
 
     @classmethod
     def load(cls, root: Path) -> "EvoConfig":
-        project = DEFAULT_PROJECT | read_json(root / "project.json", {})
-        wiki = DEFAULT_WIKI | read_json(root / "wiki.json", {})
+        project = deep_merge(DEFAULT_PROJECT, read_json(root / "project.json", {}))
+        wiki = deep_merge(DEFAULT_WIKI, read_json(root / "wiki.json", {}))
         return cls(project=project, wiki=wiki)
 
     @staticmethod

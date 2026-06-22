@@ -209,7 +209,9 @@ def count_words(markdown: str) -> int:
 def parse_sources(frontmatter: dict[str, object], markdown: str) -> list[str]:
     sources: list[str] = []
     raw = frontmatter.get("sources")
-    if isinstance(raw, str) and raw and raw != "[]":
+    if isinstance(raw, list):
+        sources.extend(str(item).strip() for item in raw if str(item).strip())
+    elif isinstance(raw, str) and raw and raw != "[]":
         sources.append(raw)
     in_sources = False
     for line in markdown.splitlines():
@@ -230,6 +232,7 @@ def markdown_to_html(markdown: str, *, resolver: Callable[[str], str]) -> str:
     code_lines: list[str] = []
     para: list[str] = []
     ul: list[str] = []
+    table: list[str] = []
     in_math = False
     math_lines: list[str] = []
 
@@ -245,6 +248,34 @@ def markdown_to_html(markdown: str, *, resolver: Callable[[str], str]) -> str:
             blocks.append("<ul>" + "".join(f"<li>{inline(item, resolver=resolver)}</li>" for item in ul) + "</ul>")
             ul = []
 
+    def split_row(row: str) -> list[str]:
+        return [cell.strip() for cell in row.strip().strip("|").split("|")]
+
+    def flush_table() -> None:
+        nonlocal table
+        if not table:
+            return
+        rows = table
+        table = []
+        # 合法表格：表头行 + 仅由 |-:空格 组成的分隔行。否则降级为段落，避免吞内容。
+        is_table = (
+            len(rows) >= 2
+            and set(rows[1].replace("|", "").replace("-", "").replace(":", "").strip()) <= {""}
+            and "-" in rows[1]
+        )
+        if not is_table:
+            for row in rows:
+                blocks.append("<p>" + inline(row, resolver=resolver) + "</p>")
+            return
+        header = split_row(rows[0])
+        thead = "<thead><tr>" + "".join(f"<th>{inline(c, resolver=resolver)}</th>" for c in header) + "</tr></thead>"
+        body_rows = []
+        for row in rows[2:]:
+            cells = split_row(row)
+            body_rows.append("<tr>" + "".join(f"<td>{inline(c, resolver=resolver)}</td>" for c in cells) + "</tr>")
+        tbody = "<tbody>" + "".join(body_rows) + "</tbody>"
+        blocks.append("<table>" + thead + tbody + "</table>")
+
     for line in markdown.splitlines():
         stripped = line.strip()
         if stripped == "$$":
@@ -253,7 +284,7 @@ def markdown_to_html(markdown: str, *, resolver: Callable[[str], str]) -> str:
                 math_lines = []
                 in_math = False
             else:
-                flush_para(); flush_ul(); in_math = True
+                flush_para(); flush_ul(); flush_table(); in_math = True
             continue
         if in_math:
             math_lines.append(line)
@@ -269,26 +300,28 @@ def markdown_to_html(markdown: str, *, resolver: Callable[[str], str]) -> str:
                 code_lang = ""
                 in_code = False
             else:
-                flush_para(); flush_ul(); in_code = True; code_lang = stripped[3:].strip().lower()
+                flush_para(); flush_ul(); flush_table(); in_code = True; code_lang = stripped[3:].strip().lower()
             continue
         if in_code:
             code_lines.append(line)
             continue
         if not stripped:
-            flush_para(); flush_ul(); continue
-        if stripped.startswith("#"):
-            flush_para(); flush_ul()
+            flush_para(); flush_ul(); flush_table(); continue
+        if stripped.startswith("|"):
+            flush_para(); flush_ul(); table.append(stripped)
+        elif stripped.startswith("#"):
+            flush_para(); flush_ul(); flush_table()
             level = min(len(stripped) - len(stripped.lstrip("#")), 6)
             text = stripped[level:].strip()
             anchor = slugify(text)
             blocks.append(f'<h{level} id="{anchor}">{inline(text, resolver=resolver)}</h{level}>')
         elif stripped.startswith("- "):
-            flush_para(); ul.append(stripped[2:].strip())
+            flush_para(); flush_table(); ul.append(stripped[2:].strip())
         elif stripped.startswith("> "):
-            flush_para(); flush_ul(); blocks.append("<blockquote>" + inline(stripped[2:].strip(), resolver=resolver) + "</blockquote>")
+            flush_para(); flush_ul(); flush_table(); blocks.append("<blockquote>" + inline(stripped[2:].strip(), resolver=resolver) + "</blockquote>")
         else:
-            para.append(stripped)
-    flush_para(); flush_ul()
+            flush_table(); para.append(stripped)
+    flush_para(); flush_ul(); flush_table()
     return "\n".join(blocks)
 
 
@@ -328,16 +361,26 @@ def build_nav(paths: ProjectPaths, *, current: str) -> str:
         raw = md.read_text(encoding="utf-8")
         frontmatter, body = split_frontmatter(raw)
         title = str(frontmatter.get("title") or extract_title(body) or md.stem)
-        cls = ' class="active"' if rel == current else ""
+        active = " active" if rel == current else ""
         href = relpath_from(current, rel)
         group = rel_md.parts[0] if rel_md.parts and rel_md.parts[0] in grouped else "other"
         if rel_md.name == "index.md" and len(rel_md.parts) == 1:
             group = "index"
-        grouped[group].append(f'<a{cls} href="{html.escape(href)}">{html.escape(title)}</a>')
+        extra = " nav-home" if group == "index" else ""
+        grouped[group].append(
+            f'<a class="nav-link{extra}{active}" href="{html.escape(href)}">{html.escape(title)}</a>'
+        )
     labels = {"index": "入口", "concepts": "概念", "entities": "实体", "summaries": "摘要", "other": "其他"}
     for group in ["index", "concepts", "entities", "summaries", "other"]:
         if grouped[group]:
-            items.append(f'<div class="nav-group"><span>{labels[group]}</span>' + "\n".join(grouped[group]) + "</div>")
+            if group == "index":
+                items.append("".join(grouped[group]))
+            else:
+                items.append(
+                    f'<div class="nav-group"><div class="nav-group-title">{labels[group]}</div>'
+                    + "".join(grouped[group])
+                    + "</div>"
+                )
     return "\n".join(items)
 
 
@@ -354,15 +397,40 @@ def asset_prefix(current: str) -> str:
     return "../" * depth
 
 
+TYPE_LABELS = {
+    "concept": "概念",
+    "entity": "实体",
+    "summary": "摘要",
+    "index": "索引",
+    "page": "页面",
+}
+
+
+def type_badge(page_type: str) -> str:
+    if page_type == "index":
+        return ""
+    label = TYPE_LABELS.get(page_type, page_type)
+    return (
+        '<div class="meta">'
+        f'<span class="type-badge type-{html.escape(page_type)}">{html.escape(label)}</span>'
+        "</div>"
+    )
+
+
 def page_template(config: EvoConfig, title: str, nav: str, body: str, *, current: str, page_type: str) -> str:
     site_title = html.escape(config.wiki.get("title", "Evo Wiki"))
     prefix = asset_prefix(current)
+    home_href = f"{prefix}index.html"
+    meta = type_badge(page_type)
     return f"""<!doctype html>
 <html lang="zh-CN">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{html.escape(title)} · {site_title}</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@400;600;700;900&family=Crimson+Pro:ital,wght@0,400;0,700;1,400&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="{prefix}assets/style.css">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.10/dist/katex.min.css">
   <script defer src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
@@ -372,12 +440,18 @@ def page_template(config: EvoConfig, title: str, nav: str, body: str, *, current
 </head>
 <body data-page-type="{html.escape(page_type)}">
   <aside class="sidebar">
-    <h1>{site_title}</h1>
-    <input id="search" placeholder="搜索 Wiki..." autocomplete="off" data-search-index="{prefix}search-index.json">
-    <div id="search-results"></div>
-    <nav>{nav}</nav>
+    <div class="sidebar-header">
+      <a class="logo" href="{home_href}"><span class="logo-icon">📚</span>{site_title}</a>
+    </div>
+    <div class="sidebar-search">
+      <input id="search" placeholder="搜索 Wiki..." autocomplete="off" data-search-index="{prefix}search-index.json">
+      <div id="search-results"></div>
+    </div>
+    <nav class="sidebar-nav">{nav}</nav>
   </aside>
-  <main class="content">{body}</main>
+  <main class="main">
+    <article class="article">{meta}{body}</article>
+  </main>
 </body>
 </html>
 """
@@ -431,28 +505,87 @@ def collect_warnings(paths: ProjectPaths, pages: list[WikiPage], health: dict) -
 
 
 STYLE = """
-:root { color-scheme: light; --bg:#f8fafc; --card:#fff; --text:#172033; --muted:#667085; --line:#e5e7eb; --blue:#2563eb; --red:#dc2626; }
-* { box-sizing: border-box; }
-body { margin:0; background:var(--bg); color:var(--text); font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
-.sidebar { position:fixed; inset:0 auto 0 0; width:300px; padding:24px; background:#0f172a; color:white; overflow:auto; }
-.sidebar h1 { font-size:22px; margin:0 0 18px; }
-.sidebar input { width:100%; border:1px solid #334155; background:#111827; color:white; border-radius:10px; padding:10px 12px; margin-bottom:12px; }
-.nav-group { margin:14px 0 18px; }
-.nav-group span { display:block; color:#94a3b8; font-size:12px; text-transform:uppercase; letter-spacing:.08em; margin:0 0 6px; }
-.sidebar nav a, #search-results a { display:block; color:#cbd5e1; text-decoration:none; padding:8px 10px; border-radius:8px; margin:2px 0; }
-.sidebar nav a:hover, .sidebar nav a.active, #search-results a:hover { background:#1e293b; color:white; }
-.content { max-width:920px; margin-left:340px; padding:48px 56px 96px; }
-.content h1 { font-size:42px; letter-spacing:-.03em; }
-.content h2 { margin-top:40px; border-bottom:1px solid var(--line); padding-bottom:8px; }
-.content p, .content li { line-height:1.78; }
-.content code { background:#eef2ff; color:#3730a3; border-radius:5px; padding:2px 5px; }
-.content pre { background:#111827; color:#e5e7eb; padding:18px; border-radius:14px; overflow:auto; }
-blockquote { border-left:4px solid var(--blue); margin:16px 0; padding:8px 16px; background:#eff6ff; color:#1e3a8a; }
-.wikilink { color:var(--blue); font-weight:600; text-decoration:none; border-bottom:1px dashed currentColor; }
-.wikilink.missing { color:var(--red); }
-.mermaid { background:white; border:1px solid var(--line); border-radius:14px; padding:16px; margin:18px 0; }
+/* Evo wiki theme — inspired by learnbuffett.com (warm cream + navy + gold, serif headings). */
+:root {
+  color-scheme: light;
+  --bg:#FAF7F2; --bg2:#F3EDE4; --text:#1B1B18; --text2:#6B6560;
+  --gold:#B8860B; --gold-light:#D4A843; --gold-glow:rgba(184,134,11,.12);
+  --navy:#1A2332; --navy-light:#2C3E50; --cream:#FFF8EE;
+  --border:#E0D6C8; --card:#FFFFFF; --link:#8B5E0B;
+  --serif:'Noto Serif SC','Crimson Pro',Georgia,'Times New Roman',serif;
+  --sans:'DM Sans',-apple-system,BlinkMacSystemFont,'PingFang SC','Microsoft YaHei',sans-serif;
+  --sidebar-w:260px;
+}
+* { box-sizing:border-box; margin:0; padding:0; }
+html { font-size:15px; scroll-behavior:smooth; }
+body { font-family:var(--sans); color:var(--text); background:var(--bg); display:flex; min-height:100vh; line-height:1.8; }
+
+/* ===== SIDEBAR ===== */
+.sidebar { width:var(--sidebar-w); background:var(--navy); position:fixed; top:0; left:0; bottom:0; overflow-y:auto; z-index:100; display:flex; flex-direction:column; }
+.sidebar-header { padding:20px 16px 16px; border-bottom:1px solid rgba(255,255,255,.08); }
+.logo { color:#fff; font-size:17px; font-weight:700; text-decoration:none; letter-spacing:.5px; font-family:var(--serif); display:inline-flex; align-items:center; gap:10px; }
+.logo-icon { font-size:22px; line-height:1; }
+.sidebar-search { padding:14px 12px 6px; }
+.sidebar-search input { width:100%; border:1px solid rgba(255,255,255,.14); background:rgba(255,255,255,.06); color:#fff; border-radius:8px; padding:9px 12px; font-size:13px; font-family:var(--sans); }
+.sidebar-search input::placeholder { color:rgba(255,255,255,.4); }
+.sidebar-search input:focus { outline:none; border-color:var(--gold); }
+#search-results { margin-top:6px; }
+#search-results a { display:block; color:#cbd5e1; text-decoration:none; padding:7px 10px; border-radius:6px; font-size:12px; }
+#search-results a:hover { background:rgba(255,255,255,.06); color:#fff; }
+.sidebar-nav { flex:1; padding:8px 0 24px; overflow-y:auto; }
+.sidebar-nav::-webkit-scrollbar { width:4px; }
+.sidebar-nav::-webkit-scrollbar-thumb { background:rgba(255,255,255,.15); border-radius:2px; }
+.nav-link { display:block; padding:6px 16px; color:#cbd5e1; text-decoration:none; font-size:13px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; border-left:3px solid transparent; transition:all .15s; }
+.nav-link:hover { background:rgba(255,255,255,.06); color:#fff; }
+.nav-link.active { color:#fff; background:rgba(184,134,11,.15); border-left-color:var(--gold); font-weight:600; }
+.nav-link.nav-home { font-size:14px; padding:10px 16px; font-weight:500; }
+.nav-group { margin-bottom:4px; }
+.nav-group-title { padding:10px 16px 6px; color:#cbd5e1; font-size:12px; font-weight:600; text-transform:uppercase; letter-spacing:.5px; }
+
+/* ===== MAIN / ARTICLE ===== */
+.main { margin-left:max(var(--sidebar-w), calc((100vw - 1160px) / 2)); flex:1; position:relative; max-width:1160px; }
+.article { max-width:820px; padding:48px 48px 80px; }
+.meta { font-size:13px; color:var(--text2); margin-bottom:16px; display:flex; align-items:center; gap:8px; }
+.type-badge { font-size:11px; padding:2px 9px; border-radius:4px; color:#fff; font-weight:600; letter-spacing:.5px; }
+.type-concept { background:#7C5E2A; }
+.type-entity  { background:#1A6B7C; }
+.type-summary { background:#2A6B4F; }
+.type-index   { background:#6B6560; }
+.type-page    { background:var(--navy-light); }
+
+.article h1 { font-family:var(--serif); font-size:30px; line-height:1.3; margin-bottom:24px; font-weight:900; color:var(--navy); letter-spacing:-.5px; }
+.article h2 { font-family:var(--serif); font-size:21px; margin:36px 0 14px; padding-bottom:8px; border-bottom:2px solid var(--border); font-weight:700; color:var(--navy); }
+.article h3 { font-family:var(--serif); font-size:17px; margin:24px 0 10px; font-weight:600; color:var(--navy-light); }
+.article h4 { font-family:var(--serif); font-size:15px; margin:18px 0 8px; font-weight:600; color:var(--navy-light); }
+.article p { margin:10px 0; }
+.article ul, .article ol { padding-left:24px; margin:10px 0; }
+.article li { margin:4px 0; }
+.article a { color:var(--link); text-decoration:none; border-bottom:1px solid rgba(139,94,11,.3); }
+.article a:hover { border-bottom-color:var(--gold); }
+
+.article a.wikilink { color:var(--link); text-decoration:none; border-bottom:none; background:linear-gradient(to bottom,transparent 60%,var(--gold-glow) 60%); transition:background .2s; font-weight:500; }
+.article a.wikilink:hover { background:linear-gradient(to bottom,transparent 40%,rgba(184,134,11,.2) 40%); }
+.article a.wikilink.missing { color:#aaa; text-decoration:line-through; background:none; }
+
+.article blockquote { background:var(--cream); border-left:4px solid var(--gold); padding:14px 20px; margin:16px 0; border-radius:0 8px 8px 0; font-style:italic; color:#5C4813; font-family:var(--serif); }
+.article code { background:var(--bg2); color:#7C5E2A; border-radius:5px; padding:2px 6px; font-size:.9em; }
+.article pre { background:var(--navy); color:#e6e1d6; padding:18px 20px; border-radius:12px; overflow:auto; margin:16px 0; border:1px solid rgba(0,0,0,.15); }
+.article pre code { background:none; color:inherit; padding:0; }
+.article table { border-collapse:collapse; width:100%; margin:16px 0; font-size:14px; }
+.article th, .article td { border:1px solid var(--border); padding:8px 12px; text-align:left; }
+.article th { background:var(--bg2); font-weight:600; color:var(--navy); }
+.article hr { border:none; border-top:1px solid var(--border); margin:32px 0; }
+
+.mermaid { background:var(--card); border:1px solid var(--border); border-radius:12px; padding:16px; margin:18px 0; }
 .math-block { overflow:auto; padding:12px 0; }
-@media (max-width: 860px) { .sidebar{position:static;width:auto;} .content{margin-left:0;padding:28px;} }
+
+@media (max-width: 980px) {
+  body { display:block; }
+  .sidebar { position:static; width:auto; bottom:auto; }
+  .main { margin-left:0; max-width:100%; }
+  .article { padding:28px 22px 64px; }
+  .article h1 { font-size:24px; }
+}
 """
 
 APP_JS = """
@@ -462,6 +595,7 @@ async function initSearch(){
   if(!input || !box) return;
   let data=[];
   const indexPath = input.dataset.searchIndex || 'search-index.json';
+  const base = indexPath.replace(/search-index\.json$/, '');
   try { data = await (await fetch(indexPath)).json(); } catch(e) { return; }
   input.addEventListener('input', () => {
     const q = input.value.trim().toLowerCase();
@@ -469,7 +603,7 @@ async function initSearch(){
     if(!q) return;
     data.filter(p => (p.title + ' ' + p.type + ' ' + p.text).toLowerCase().includes(q)).slice(0,8).forEach(p => {
       const a = document.createElement('a');
-      a.href = p.path;
+      a.href = base + p.path;
       a.textContent = `${p.title} · ${p.type}`;
       box.appendChild(a);
     });

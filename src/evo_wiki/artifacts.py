@@ -12,7 +12,7 @@ from .utils import read_json, utc_now, write_json
 VALID_LANES = {"wiki", "lightrag"}
 
 
-def write_agent_plan(paths: ProjectPaths, *, selected_lanes: list[str], change_set: dict, reason: str) -> None:
+def write_agent_plan(paths: ProjectPaths, *, selected_lanes: list[str], change_set: dict, reason: str, change_sets: dict | None = None) -> None:
     paths.agent.mkdir(parents=True, exist_ok=True)
     plan = {
         "run_type": "incremental" if any(change_set.values()) else "full_or_no_change",
@@ -22,6 +22,9 @@ def write_agent_plan(paths: ProjectPaths, *, selected_lanes: list[str], change_s
         "lightrag": {"action": "run" if "lightrag" in selected_lanes else "skip"},
         "change_set": change_set,
     }
+    if change_sets is not None:
+        # H2：记录每条 lane 各自的变更集，便于诊断 lane 间的独立增量。
+        plan["change_sets"] = change_sets
     write_json(paths.agent / "delta-plan.json", plan)
     (paths.agent / "evo-plan.md").write_text(
         "# Evo wiki Run Plan\n\n"

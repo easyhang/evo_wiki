@@ -403,6 +403,19 @@ workspace/artifacts/agent/delta-plan.json
 
 Evo wiki 的 Wiki lane 吸收 `llm-wiki-demo` 的核心做法：让 AI 把原始资料持续编译成一个可交叉引用、可审计、可演进的 Markdown Wiki。区别是：**Evo wiki 的最终交付目标不是停留在 Markdown，而是渲染成 `workspace/artifacts/wiki/dist/` 下的静态 HTML 页面。**
 
+### 6.0 风格参考
+
+渲染器的默认视觉风格参考 [learnbuffett.com](https://learnbuffett.com/)（暖色纸张底 + navy 侧栏 + 金色点缀 + 衬线标题），已固化进 `src/evo_wiki/wiki.py` 的 `STYLE` 与 `page_template`。可直接打开的成品样例与设计系统说明见：
+
+```text
+references/style-samples/
+  README.md          # 设计 tokens 与版式规则
+  wiki-src/          # 页面结构范例（index / concepts / entities / summaries）
+  site/              # 渲染出的静态 HTML 成品（浏览器直接打开 site/index.html）
+```
+
+生成或重组 Wiki 时，可参照 `references/style-samples/wiki-src/` 的页面结构与交叉链接写法。
+
 ### 6.1 Wiki 源目录结构
 
 Claude Code 维护 Markdown 源文件：

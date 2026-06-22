@@ -15,6 +15,22 @@ VALID_SEVERITIES = {"info", "suggest", "warn", "error"}
 VALID_STATUSES = {"open", "resolved"}
 VALID_SOURCES = {"agent", "manual"}
 UNLINKED_CONCEPT_THRESHOLD = 3
+# 结构性标题词不应被当作"潜在概念"：它们是约定俗成的章节标题，而非领域概念。
+STOPWORDS = {
+    "sources",
+    "references",
+    "background",
+    "summary",
+    "connections",
+    "contributions",
+    "key contributions",
+    "key points",
+    "key properties",
+    "main argument",
+    "open questions",
+    "see also",
+    "how it works",
+}
 
 
 @dataclass(frozen=True)
@@ -69,23 +85,44 @@ def stem_to_path_map(wiki_src: Path) -> dict[str, Path]:
     for md in collect_md_files(wiki_src):
         mapping[md.stem.lower()] = md
         mapping[slugify(md.stem)] = md
+        # 标题别名：与渲染器 build_link_map 对齐，让基于 frontmatter title 的中文
+        # wikilink（如 [[护城河]]）能被正确识别，避免误报 dead_wikilink / orphan。
+        fields = parse_yaml_frontmatter(read_text_safe(md))
+        title = (fields or {}).get("title")
+        if isinstance(title, str) and title:
+            mapping[title.lower()] = md
+            mapping[slugify(title)] = md
         if md.name == "index.md" and md.parent != wiki_src:
             mapping[md.parent.name.lower()] = md
             mapping[slugify(md.parent.name)] = md
     return mapping
 
 
-def parse_yaml_frontmatter(text: str) -> dict[str, str] | None:
+def parse_yaml_frontmatter(text: str) -> dict[str, object] | None:
     lines = text.split("\n")
     if not lines or lines[0].strip() != "---":
         return None
-    fields: dict[str, str] = {}
+    fields: dict[str, object] = {}
+    last_key: str | None = None
     for line in lines[1:]:
         if line.strip() == "---":
             return fields
+        stripped = line.strip()
+        # 块状列表项（"  - item"）归属到最近一个值为空的标量键，聚合成 Python 列表。
+        if stripped.startswith("- ") and last_key is not None:
+            item = stripped[2:].strip().strip('"').strip("'")
+            existing = fields.get(last_key)
+            if isinstance(existing, list):
+                existing.append(item)
+            else:
+                fields[last_key] = [item]
+            continue
         if ":" in line:
             key, _, value = line.partition(":")
-            fields[key.strip()] = value.strip().strip('"').strip("'")
+            key = key.strip()
+            value = value.strip().strip('"').strip("'")
+            fields[key] = value
+            last_key = key
     return None
 
 
@@ -104,11 +141,15 @@ def pass_orphan_pages(root: Path, wiki_src: Path, stem_map: dict[str, Path]) -> 
         for target in extract_wikilinks(read_text_safe(md)):
             linked_stems.add(target.lower())
             linked_stems.add(slugify(target))
+    aliases_by_path: dict[Path, set[str]] = {}
+    for alias, path in stem_map.items():
+        aliases_by_path.setdefault(path, set()).add(alias)
     issues: list[HealthIssue] = []
-    for stem, path in sorted(stem_map.items()):
-        if stem == "index" or path.name == "index.md":
+    for path, aliases in sorted(aliases_by_path.items()):
+        if path.name == "index.md":
             continue
-        if stem not in linked_stems:
+        # 只要任一别名（stem 或 title）被引用，就不算孤儿页。
+        if not (aliases & linked_stems):
             issues.append(HealthIssue("warn", "orphan_page", "Page has no inbound wikilinks", relpath(path, root)))
     return issues
 
@@ -118,14 +159,15 @@ def pass_missing_index_entries(root: Path, wiki_src: Path, stem_map: dict[str, P
     if not index_path.exists():
         return [HealthIssue("error", "missing_index", "wiki-src/index.md does not exist", relpath(wiki_src, root))]
     index_text = read_text_safe(index_path).lower()
+    aliases_by_path: dict[Path, set[str]] = {}
+    for alias, path in stem_map.items():
+        aliases_by_path.setdefault(path, set()).add(alias)
     issues: list[HealthIssue] = []
-    seen: set[Path] = set()
-    for stem, path in sorted(stem_map.items()):
-        if path in seen or stem == "index" or path == index_path:
+    for path, aliases in sorted(aliases_by_path.items()):
+        if path == index_path or path.name == "index.md":
             continue
-        seen.add(path)
-        index_alias = stem.replace("-", " ")
-        if stem not in index_text and index_alias not in index_text:
+        # 任一别名（含 dash->空格 变体）出现在 index.md 即视为已收录。
+        if not any(alias in index_text or alias.replace("-", " ") in index_text for alias in aliases):
             issues.append(HealthIssue("warn", "not_in_index", "Page is not mentioned in index.md", relpath(path, root)))
     return issues
 
@@ -139,6 +181,8 @@ def pass_unlinked_concepts(root: Path, wiki_src: Path, stem_map: dict[str, Path]
     for term, count in counts.most_common(20):
         if count < UNLINKED_CONCEPT_THRESHOLD:
             break
+        if term.lower() in STOPWORDS:
+            continue
         if slugify(term) not in stem_map and term.lower() not in linked and slugify(term) not in linked:
             issues.append(HealthIssue("info", "unlinked_concept", f'Potential concept "{term}" appears {count} times without a page'))
     return issues

@@ -25,6 +25,7 @@ class ProjectPaths:
     lightrag_workspace: Path
     lightrag_reports: Path
     lightrag_state: Path
+    lightrag_queries: Path
     docker: Path
 
     @classmethod
@@ -51,6 +52,7 @@ class ProjectPaths:
             lightrag_workspace=lightrag / "workspace",
             lightrag_reports=lightrag / "reports",
             lightrag_state=lightrag / "state",
+            lightrag_queries=lightrag / "queries",
             docker=artifacts / "docker",
         )
 
@@ -73,6 +75,7 @@ class ProjectPaths:
             self.lightrag_workspace,
             self.lightrag_reports,
             self.lightrag_state,
+            self.lightrag_queries,
             self.docker,
         ]:
             path.mkdir(parents=True, exist_ok=True)
