@@ -61,14 +61,17 @@ body { font-family:var(--sans); color:var(--text); background:var(--bg); display
 .related-section .related-count { margin-left:auto; }
 .related-items { display:flex; flex-direction:column; margin-top:4px; }
 .related-item { border:none; background:none; }
-.related-item > summary { cursor:pointer; list-style:none; display:flex; align-items:center; gap:8px; padding:5px 0 5px 14px; }
+.related-item > summary { cursor:pointer; list-style:none; display:flex; align-items:flex-start; gap:8px; padding:7px 0 7px 14px; }
 .related-item > summary::-webkit-details-marker { display:none; }
-.related-item > summary::before { content:'▸'; color:var(--text2); opacity:.5; font-size:9px; transition:transform .16s ease; }
+.related-item > summary::before { content:'▸'; color:var(--text2); opacity:.5; font-size:9px; line-height:1.8; transition:transform .16s ease; }
 .related-item[open] > summary::before { color:var(--gold); opacity:1; transform:rotate(90deg); }
-.related-item-title { color:var(--link); font-size:13px; font-weight:500; }
+.related-item-main { display:flex; flex-direction:column; gap:3px; min-width:0; flex:1; }
+.related-item-title { color:var(--link); font-size:13px; font-weight:500; line-height:1.45; }
+.related-summary-preview { color:var(--text2); font-size:12px; line-height:1.55; font-weight:400; opacity:.9; display:block; }
 .related-item:hover .related-item-title { color:var(--gold); }
-.related-mentions { margin-left:auto; font-size:11px; color:var(--text2); opacity:.55; }
-.related-item-body { padding:2px 0 8px 28px; }
+.related-mentions { margin-left:auto; white-space:nowrap; font-size:11px; line-height:1.8; color:var(--text2); opacity:.55; }
+.related-item-body { padding:0 0 8px 28px; }
+.related-summary { margin:6px 0 7px; padding:7px 9px; border-left:2px solid var(--gold); border-radius:0 8px 8px 0; background:rgba(184,134,11,.07); font-size:12px; line-height:1.55; color:var(--text); }
 .related-excerpt { margin:6px 0 0; font-size:12px; line-height:1.6; color:var(--text2); }
 .related-hit { background:none; color:var(--text); border-bottom:1.5px solid var(--gold); padding:0; font-weight:600; }
 .related-more { margin:5px 0 0; font-size:11px; color:var(--text2); opacity:.55; }

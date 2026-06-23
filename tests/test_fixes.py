@@ -244,11 +244,11 @@ def test_source_pages_render_with_source_type_and_nav_group(tmp_path: Path):
         encoding="utf-8",
     )
     (paths.wiki_src / "concepts" / "moat.md").write_text(
-        "---\ntitle: 护城河\ntype: concept\n---\n\n# 护城河\n\n## 摘要\n\n基于语料归纳。\n",
+        "---\ntitle: 护城河\ntype: concept\n---\n\n# 护城河\n\n## 摘要\n\n基于语料归纳。\n\n## 相关页面\n\n- [[沃伦·巴菲特]]\n",
         encoding="utf-8",
     )
     (paths.wiki_src / "entities" / "buffett.md").write_text(
-        "---\ntitle: 沃伦·巴菲特\ntype: entity\n---\n\n# 沃伦·巴菲特\n\n## 摘要\n\n语料中的人物。\n",
+        "---\ntitle: 沃伦·巴菲特\ntype: entity\n---\n\n# 沃伦·巴菲特\n\n## 摘要\n\n语料中的人物。\n\n## 关联概念\n\n- [[护城河]]\n",
         encoding="utf-8",
     )
     source = paths.wiki_src / "sources" / "doc.md"
@@ -259,6 +259,8 @@ def test_source_pages_render_with_source_type_and_nav_group(tmp_path: Path):
     )
     report = render_wiki(paths, EvoConfig())
     html = (paths.wiki_dist / "sources" / "doc.html").read_text(encoding="utf-8")
+    concept_html = (paths.wiki_dist / "concepts" / "moat.html").read_text(encoding="utf-8")
+    entity_html = (paths.wiki_dist / "entities" / "buffett.html").read_text(encoding="utf-8")
 
     assert report["status"] == "success"
     assert '<span class="type-badge type-source">原文</span>' in html
@@ -268,7 +270,19 @@ def test_source_pages_render_with_source_type_and_nav_group(tmp_path: Path):
     assert '完整原文提到<a class="wikilink" href="../concepts/moat.html">护城河</a>与<a class="wikilink" href="../entities/buffett.html">沃伦·巴菲特</a>。' in html
     assert '<aside class="page-aside"><div class="related-panel">' in html
     assert "链接到本页" in html
+    assert '<span class="related-summary-preview">基于语料归纳。</span>' in html
+    assert '<span class="related-summary-preview">语料中的人物。</span>' in html
     assert "## Sources" not in html
+    assert "链接到本页" in concept_html
+    assert '<summary>实体 <span class="related-count">1</span></summary>' in concept_html
+    assert '<span class="related-item-title">沃伦·巴菲特</span>' in concept_html
+    assert '<span class="related-summary-preview">语料中的人物。</span>' in concept_html
+    assert 'href="../entities/buffett.html">查看页面 →</a>' in concept_html
+    assert "链接到本页" in entity_html
+    assert '<summary>概念 <span class="related-count">1</span></summary>' in entity_html
+    assert '<span class="related-item-title">护城河</span>' in entity_html
+    assert '<span class="related-summary-preview">基于语料归纳。</span>' in entity_html
+    assert 'href="../concepts/moat.html">查看页面 →</a>' in entity_html
 
 
 def test_render_wiki_writes_progress_and_lint_metadata(tmp_path: Path):

@@ -102,12 +102,13 @@ def render_wiki(paths: ProjectPaths, config: EvoConfig) -> dict:
 
         link_map = build_link_map(paths, markdown_files)
         page_index = build_page_index(paths, markdown_files)
+        backlink_index = build_backlink_index(paths, markdown_files, page_index)
         update_wiki_progress(paths, progress, "build_link_map", "running", link_alias_count=len(link_map))
 
         pages: list[WikiPage] = []
         for index, md in enumerate(markdown_files, start=1):
             try:
-                page = render_page(paths, config, md, link_map, page_index)
+                page = render_page(paths, config, md, link_map, page_index, backlink_index)
             except Exception as exc:
                 failed = {"source": relpath(md, paths.root), "error": str(exc)}
                 progress.setdefault("failed_pages", []).append(failed)
@@ -126,7 +127,7 @@ def render_wiki(paths: ProjectPaths, config: EvoConfig) -> dict:
         write_dependency_graph(paths, pages, link_map)
         update_wiki_progress(paths, progress, "write_dependency_graph", "running")
 
-        # 结束阶段必须 lint：页面一致性、链接、孤儿页、索引收录、概念冲突、原文页结构等都在这里汇总。
+        # 结束阶段必须 lint：链接、孤儿页、索引收录、audit/log 形状与 HTML 必需原文页结构在这里汇总。
         health = lint_wiki_artifacts(paths.root, paths.wiki_src, paths.wiki_audit, paths.wiki_log)
         write_json(paths.wiki_reports / "wiki-health.json", health)
         update_wiki_progress(
@@ -222,7 +223,7 @@ def build_page_index(paths: ProjectPaths, markdown_files: list[Path]) -> dict[st
         frontmatter, body = split_frontmatter(raw)
         title = str(frontmatter.get("title") or extract_title(body) or md.stem)
         page_type = str(frontmatter.get("type") or infer_page_type(md, paths.wiki_src))
-        meta = {"title": title, "type": page_type, "path": rel_html}
+        meta = {"title": title, "type": page_type, "path": rel_html, "summary": extract_page_summary(body)}
         aliases = {md.stem.lower(), slugify(md.stem), title.lower(), slugify(title)}
         if md.name == "index.md" and md.parent != paths.wiki_src:
             aliases.add(md.parent.name.lower())
@@ -232,7 +233,38 @@ def build_page_index(paths: ProjectPaths, markdown_files: list[Path]) -> dict[st
     return index
 
 
-def render_page(paths: ProjectPaths, config: EvoConfig, md_path: Path, link_map: dict[str, str], page_index: dict[str, dict[str, str]]) -> WikiPage:
+def build_backlink_index(paths: ProjectPaths, markdown_files: list[Path], page_index: dict[str, dict[str, str]]) -> dict[str, dict[str, dict[str, dict]]]:
+    backlink_index: dict[str, dict[str, dict[str, dict]]] = {}
+    allowed_types = {"concept", "entity"}
+    for md in markdown_files:
+        rel_html = md.relative_to(paths.wiki_src).with_suffix(".html").as_posix()
+        raw = md.read_text(encoding="utf-8")
+        frontmatter, body = split_frontmatter(raw)
+        source_type = str(frontmatter.get("type") or infer_page_type(md, paths.wiki_src))
+        if source_type not in allowed_types:
+            continue
+        title = str(frontmatter.get("title") or extract_title(body) or md.stem)
+        source_meta = {"title": title, "type": source_type, "path": rel_html, "summary": extract_page_summary(body)}
+        for link in extract_wikilinks(body):
+            target_meta = page_index.get(link.lower()) or page_index.get(slugify(link))
+            if not target_meta or target_meta.get("type") not in allowed_types:
+                continue
+            target_path = target_meta["path"]
+            if target_path == rel_html:
+                continue
+            groups = backlink_index.setdefault(target_path, {"concept": {}, "entity": {}})
+            groups[source_type][rel_html] = {"meta": source_meta, "excerpts": []}
+    return backlink_index
+
+
+def render_page(
+    paths: ProjectPaths,
+    config: EvoConfig,
+    md_path: Path,
+    link_map: dict[str, str],
+    page_index: dict[str, dict[str, str]],
+    backlink_index: dict[str, dict[str, dict[str, dict]]],
+) -> WikiPage:
     raw = md_path.read_text(encoding="utf-8")
     frontmatter, markdown = split_frontmatter(raw)
     title = str(frontmatter.get("title") or extract_title(markdown) or md_path.stem.replace("-", " ").title())
@@ -247,7 +279,12 @@ def render_page(paths: ProjectPaths, config: EvoConfig, md_path: Path, link_map:
     out = paths.wiki_dist / rel
     out.parent.mkdir(parents=True, exist_ok=True)
     nav = build_nav(paths, current=current)
-    aside = source_related_panel(markdown, links, current, page_index) if page_type == "source" else ""
+    if page_type == "source":
+        aside = source_related_panel(markdown, links, current, page_index)
+    elif page_type in {"concept", "entity"}:
+        aside = backlink_related_panel(current, backlink_index)
+    else:
+        aside = ""
     html_doc = page_template(config, title, nav, body, current=current, page_type=page_type, aside=aside)
     out.write_text(html_doc, encoding="utf-8")
     text = strip_markdown(markdown)
@@ -292,6 +329,66 @@ def extract_title(markdown: str) -> str | None:
         if line.startswith("# "):
             return line[2:].strip()
     return None
+
+
+def truncate_text(text: str, max_chars: int) -> str:
+    if len(text) <= max_chars:
+        return text
+    return text[: max_chars - 1].rstrip() + "…"
+
+
+def extract_page_summary(markdown: str, *, max_chars: int = 140) -> str:
+    summary = extract_named_section(markdown, {"摘要", "summary"}) or first_content_paragraph(markdown)
+    summary = clean_summary_text(strip_markdown(_wikilink_plain(summary)))
+    return truncate_text(summary, max_chars)
+
+
+def clean_summary_text(text: str) -> str:
+    text = re.sub(r"\s+", " ", text).strip()
+    text = re.sub(r"([\u4e00-\u9fff])\s+([\u4e00-\u9fff])", r"\1\2", text)
+    text = re.sub(r"([\u4e00-\u9fff])\s+(?=[，。！？；：、])", r"\1", text)
+    text = re.sub(r"([（《「『【])\s+", r"\1", text)
+    text = re.sub(r"\s+([）》」』】])", r"\1", text)
+    return text
+
+
+def extract_named_section(markdown: str, names: set[str]) -> str | None:
+    lines = markdown.splitlines()
+    start: int | None = None
+    for idx, line in enumerate(lines):
+        match = re.match(r"^##\s+(.+?)\s*$", line)
+        if match and match.group(1).strip().lower() in names:
+            start = idx + 1
+            break
+    if start is None:
+        return None
+    collected: list[str] = []
+    for line in lines[start:]:
+        if line.startswith("## "):
+            break
+        collected.append(line)
+    text = "\n".join(collected).strip()
+    return text or None
+
+
+def first_content_paragraph(markdown: str) -> str:
+    paragraph: list[str] = []
+    in_code = False
+    for raw_line in markdown.splitlines():
+        line = raw_line.strip()
+        if line.startswith("```"):
+            in_code = not in_code
+            continue
+        if in_code or not line or line.startswith("---"):
+            if paragraph:
+                break
+            continue
+        if line.startswith("#") or line.startswith("|") or set(line) <= {"-", ":", "|", " "}:
+            continue
+        if line.startswith("- "):
+            line = line[2:].strip()
+        paragraph.append(line)
+    return " ".join(paragraph)
 
 
 def strip_markdown(markdown: str) -> str:
@@ -494,6 +591,7 @@ def make_link_resolver(*, current: str, link_map: dict[str, str]) -> Callable[[s
 _WIKILINK_RE = re.compile(r"\[\[([^\]|]+)(?:\|([^\]]+))?\]\]")
 _SENTENCE_ENDERS = "。！？!?；;\n"
 _MAX_EXCERPTS_PER_LINK = 2
+_RELATED_SUMMARY_PREVIEW_CHARS = 96
 
 
 def _original_section(markdown: str) -> str:
@@ -559,37 +657,51 @@ def source_related_panel(markdown: str, links: list[str], current: str, page_ind
             continue
         groups[meta["type"]].setdefault(meta["path"], {"meta": meta, "excerpts": []})
 
-    if not groups["concept"] and not groups["entity"]:
+    return related_panel_html(groups, current, link_label="查看原文 →", show_mentions=True)
+
+
+def backlink_related_panel(current: str, backlink_index: dict[str, dict[str, dict[str, dict]]]) -> str:
+    groups = backlink_index.get(current)
+    if not groups:
+        return ""
+    return related_panel_html(groups, current, link_label="查看页面 →", show_mentions=False)
+
+
+def related_panel_html(groups: dict[str, dict[str, dict]], current: str, *, link_label: str, show_mentions: bool) -> str:
+    if not groups.get("concept") and not groups.get("entity"):
         return ""
 
     labels = {"concept": "概念", "entity": "实体"}
-    total = len(groups["concept"]) + len(groups["entity"])
+    total = len(groups.get("concept", {})) + len(groups.get("entity", {}))
     sections = []
     for group in ["concept", "entity"]:
-        entries = groups[group]
+        entries = groups.get(group, {})
         if not entries:
             continue
         items = []
         for entry in sorted(entries.values(), key=lambda item: item["meta"]["title"]):
             meta = entry["meta"]
             href = relpath_from(current, meta["path"])
-            excerpts = entry["excerpts"]
+            excerpts = entry.get("excerpts", [])
             mentions = len(excerpts)
-            count_label = f'<span class="related-mentions">{mentions} 处</span>' if mentions else ""
-            body_parts = [
+            count_label = f'<span class="related-mentions">{mentions} 处</span>' if show_mentions and mentions else ""
+            summary = truncate_text(str(meta.get("summary") or "").strip(), _RELATED_SUMMARY_PREVIEW_CHARS)
+            summary_preview = f'<span class="related-summary-preview">{html.escape(summary)}</span>' if summary else ""
+            body_parts = []
+            body_parts.extend(
                 f'<p class="related-excerpt">{exc}</p>'
                 for exc in excerpts[:_MAX_EXCERPTS_PER_LINK]
-            ]
-            if mentions > _MAX_EXCERPTS_PER_LINK:
+            )
+            if show_mentions and mentions > _MAX_EXCERPTS_PER_LINK:
                 body_parts.append(
                     f'<p class="related-more">…还有 {mentions - _MAX_EXCERPTS_PER_LINK} 处提及</p>'
                 )
             body_parts.append(
-                f'<a class="related-original-link" href="{html.escape(href)}">查看原文 →</a>'
+                f'<a class="related-original-link" href="{html.escape(href)}">{html.escape(link_label)}</a>'
             )
             items.append(
                 f'<details class="related-item related-{group}">'
-                f'<summary class="related-item-head"><span class="related-item-title">{html.escape(meta["title"])}</span>{count_label}</summary>'
+                f'<summary class="related-item-head"><span class="related-item-main"><span class="related-item-title">{html.escape(meta["title"])}</span>{summary_preview}</span>{count_label}</summary>'
                 f'<div class="related-item-body">{"".join(body_parts)}</div>'
                 "</details>"
             )
@@ -605,6 +717,7 @@ def source_related_panel(markdown: str, links: list[str], current: str, page_ind
         + "".join(sections)
         + "</div></aside>"
     )
+
 
 
 def build_nav(paths: ProjectPaths, *, current: str) -> str:
@@ -825,14 +938,17 @@ body { font-family:var(--sans); color:var(--text); background:var(--bg); display
 .related-section .related-count { margin-left:auto; }
 .related-items { display:flex; flex-direction:column; margin-top:4px; }
 .related-item { border:none; background:none; }
-.related-item > summary { cursor:pointer; list-style:none; display:flex; align-items:center; gap:8px; padding:5px 0 5px 14px; }
+.related-item > summary { cursor:pointer; list-style:none; display:flex; align-items:flex-start; gap:8px; padding:7px 0 7px 14px; }
 .related-item > summary::-webkit-details-marker { display:none; }
-.related-item > summary::before { content:'▸'; color:var(--text2); opacity:.5; font-size:9px; transition:transform .16s ease; }
+.related-item > summary::before { content:'▸'; color:var(--text2); opacity:.5; font-size:9px; line-height:1.8; transition:transform .16s ease; }
 .related-item[open] > summary::before { color:var(--gold); opacity:1; transform:rotate(90deg); }
-.related-item-title { color:var(--link); font-size:13px; font-weight:500; }
+.related-item-main { display:flex; flex-direction:column; gap:3px; min-width:0; flex:1; }
+.related-item-title { color:var(--link); font-size:13px; font-weight:500; line-height:1.45; }
+.related-summary-preview { color:var(--text2); font-size:12px; line-height:1.55; font-weight:400; opacity:.9; display:block; }
 .related-item:hover .related-item-title { color:var(--gold); }
-.related-mentions { margin-left:auto; font-size:11px; color:var(--text2); opacity:.55; }
-.related-item-body { padding:2px 0 8px 28px; }
+.related-mentions { margin-left:auto; white-space:nowrap; font-size:11px; line-height:1.8; color:var(--text2); opacity:.55; }
+.related-item-body { padding:0 0 8px 28px; }
+.related-summary { margin:6px 0 7px; padding:7px 9px; border-left:2px solid var(--gold); border-radius:0 8px 8px 0; background:rgba(184,134,11,.07); font-size:12px; line-height:1.55; color:var(--text); }
 .related-excerpt { margin:6px 0 0; font-size:12px; line-height:1.6; color:var(--text2); }
 .related-hit { background:none; color:var(--text); border-bottom:1.5px solid var(--gold); padding:0; font-weight:600; }
 .related-more { margin:5px 0 0; font-size:11px; color:var(--text2); opacity:.55; }
