@@ -1,0 +1,38 @@
+[
+  {
+    "title": "内在价值",
+    "type": "concept",
+    "path": "concepts/intrinsic-value.html",
+    "text": "内在价值 一句话定义：在本样例语料中，内在价值指企业未来可分配现金流的折现值；它不是精确数字，而是需要估算的区间。 语料社区摘要 两份语料都把内在价值与市场报价区分开：市场价格每天波动，但估值讨论应回到企业未来能够产生并分配给所有者的现金流。 sample-notes.md 进一步说明，估算内在价值需要结合企业质量、管理层资本配置能力与长期现金流前景。 1986-letter.md 则强调，投资者应关注企业的内在价值，而不是市场每天给出的报价。 影响因素 - 护城河 ：语料中认为可持续优势会让利润不易被竞争者侵蚀，从而影响现金流可预期性。 - 沃伦·巴菲特 ：样例语料把他作为这一估值原则的主要表达者。 - 管理层资本配置能力：语料明确提到，诚实评估机会并投入高回报用途会改善长期结果。 Open Questions - 样例语料没有给出折现率、现金流预测期或安全边际的计算方法；本页不补写这些细节。 Sources - examples/learnbuffett-style/corpus/raw/sample-notes.md - examples/learnbuffett-style/corpus/raw/1986-letter.md"
+  },
+  {
+    "title": "护城河",
+    "type": "concept",
+    "path": "concepts/moat.html",
+    "text": "护城河 一句话定义：在本样例语料中，护城河指企业抵御竞争、并在较长时间内保持较高资本回报率的结构性优势。 语料社区摘要 sample-notes.md 与 1986-letter.md 都把护城河放在「优秀企业为什么值得长期持有」这一社区语境中：优秀企业不只是短期利润高，更重要的是竞争者不容易快速侵蚀利润。 语料明确提到的护城河来源包括：品牌、低成本结构、客户转换成本、网络效应、客户关系，以及其他结构性因素。样例语料没有提供机械评分公式，因此本页不扩写通用评估模型。 与其他页面的关系 - 护城河提高未来现金流的可预期性，因此会影响 内在价值 的估算。 - 沃伦·巴菲特 在样例语料中是该概念的主要表达者。 - 1986 致股东信原文 中保留了「护城河意味着可持续优势」的原文段落。 结构示意 Open Questions - 样例语料没有说明如何量化护城河宽度；真实项目中应回到原始资料查证，而不是补写模型常识。 Sources - examples/learnbuffett-style/corpus/raw/sample-notes.md - examples/learnbuffett-style/corpus/raw/1986-letter.md"
+  },
+  {
+    "title": "沃伦·巴菲特",
+    "type": "entity",
+    "path": "entities/warren-buffett.html",
+    "text": "沃伦·巴菲特 在本样例语料中，沃伦·巴菲特被作为实体处理：他是伯克希尔·哈撒韦董事长兼 CEO，也是股东信中投资原则的主要表达者。 语料社区摘要 语料没有展开巴菲特的完整生平，因此本页只记录样例中出现的角色与观点：他通过股东信强调以合理价格买入优秀企业、关注 内在价值 ，并重视企业是否拥有 护城河 。 1986-letter.md 样例摘录还把管理层资本配置能力放在长期股东回报的语境下讨论。这里的重点不是人物传记，而是该实体与概念社区之间的关系。 关联概念 - 护城河 ：用于解释优秀企业为什么能够抵御竞争。 - 内在价值 ：用于解释投资者应关注现金流而非每日市场报价。 - 1986 致股东信摘要 与 1986 致股东信原文 ：保留来源上下文。 Open Questions - 样例语料没有提供出生年份、职业经历等传记信息；本页不补充外部百科知识。 Sources - examples/learnbuffett-style/corpus/raw/sample-notes.md - examples/learnbuffett-style/corpus/raw/1986-letter.md"
+  },
+  {
+    "title": "巴菲特知识库（样例）",
+    "type": "index",
+    "path": "index.html",
+    "text": "巴菲特知识库（样例） 这是 Evo wiki 渲染器输出的 HTML 页面样例 ，视觉参考 learnbuffett.com https://learnbuffett.com/ ：暖色纸张底、navy 侧栏、金色点缀、衬线标题。 本样例演示 Wiki 导航层级：入口 → 概念 → 实体 → 摘要 → 原文。所有正文都基于 corpus/raw/ 中的中文样例语料，不使用模型常识补充未出现的传记或投资细节。 核心概念 - 护城河 —— 语料中用于描述企业抵御竞争、长期维持较高资本回报率的结构性优势。 - 内在价值 —— 语料中被描述为企业未来可分配现金流的折现值或估算区间。 关键实体 - 沃伦·巴菲特 —— 语料中出现的伯克希尔·哈撒韦董事长兼 CEO，也是股东信投资原则的主要表达者。 资料摘要 - 1986 致股东信摘要 —— 基于中文样例摘录整理的来源摘要。 原文页面 - 1986 致股东信原文 —— 包含来源摘要与完整原文内容，便于审计页面论断。 Sources - examples/learnbuffett-style/corpus/raw/sample-notes.md - examples/learnbuffett-style/corpus/raw/1986-letter.md"
+  },
+  {
+    "title": "1986 致股东信原文",
+    "type": "source",
+    "path": "sources/1986-letter.html",
+    "text": "1986 致股东信原文 来源 ： examples/learnbuffett-style/corpus/raw/1986-letter.md 摘要 这份样例原文围绕三个主题展开：以合理价格买入优秀企业、关注 内在价值 而不是每日市场报价，以及通过 护城河 理解企业可持续优势。语料还强调管理层资本配置能力会影响长期股东结果。 原文内容 Sources - examples/learnbuffett-style/corpus/raw/1986-letter.md"
+  },
+  {
+    "title": "1986 致股东信摘要",
+    "type": "summary",
+    "path": "summaries/1986-letter.html",
+    "text": "1986 致股东信摘要 来源 ： examples/learnbuffett-style/corpus/raw/1986-letter.md 主要论点 这份中文样例摘录强调：投资者更应以合理价格买入拥有持久经济特征的优秀企业，并关注企业未来现金流形成的 内在价值 ，而不是市场每天的报价。 关键要点 - 优秀企业之所以值得长期持有，是因为它们可能持续把留存收益投入高回报项目。 - 管理层资本配置能力会影响长期股东结果。 - 护城河 在语料中被定义为企业拥有某种可持续优势，使竞争者难以快速侵蚀利润。 引用的概念与实体 - 护城河 - 内在价值 - 沃伦·巴菲特 原文入口 - 1986 致股东信原文 保留了完整原文，便于审计摘要与概念页中的论断。 Sources - examples/learnbuffett-style/corpus/raw/1986-letter.md"
+  }
+]

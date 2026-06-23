@@ -29,7 +29,7 @@ class WikiPage:
 def ensure_wiki_stub(paths: ProjectPaths, config: EvoConfig) -> None:
     """Create llm-wiki-style starter wiki-src files for Claude Code to edit."""
     paths.wiki_src.mkdir(parents=True, exist_ok=True)
-    for subdir in ["concepts", "entities", "summaries"]:
+    for subdir in ["concepts", "entities", "summaries", "sources"]:
         (paths.wiki_src / subdir).mkdir(parents=True, exist_ok=True)
     for page in config.wiki.get("pages", []):
         rel = page.get("path", "index.md")
@@ -84,7 +84,7 @@ def render_wiki(paths: ProjectPaths, config: EvoConfig) -> dict:
         "page_count": len(pages),
         "html_output": relpath(paths.wiki_dist / "index.html", paths.root),
         "llm_wiki_model": {
-            "layout": "index + concepts/entities/summaries + audit/log/queries",
+            "layout": "index + concepts/entities/summaries/sources + audit/log/queries",
             "final_output": "static_html",
             "renderer": "evo_wiki.wiki",
         },
@@ -178,8 +178,8 @@ def infer_page_type(path: Path, wiki_src: Path) -> str:
         rel = path.relative_to(wiki_src)
     except ValueError:
         return "page"
-    if rel.parts and rel.parts[0] in {"concepts", "entities", "summaries"}:
-        return {"concepts": "concept", "entities": "entity", "summaries": "summary"}[rel.parts[0]]
+    if rel.parts and rel.parts[0] in {"concepts", "entities", "summaries", "sources"}:
+        return {"concepts": "concept", "entities": "entity", "summaries": "summary", "sources": "source"}[rel.parts[0]]
     if rel.name == "index.md":
         return "index"
     return "page"
@@ -354,7 +354,7 @@ def make_link_resolver(*, current: str, link_map: dict[str, str]) -> Callable[[s
 
 def build_nav(paths: ProjectPaths, *, current: str) -> str:
     items = []
-    grouped = {"index": [], "concepts": [], "entities": [], "summaries": [], "other": []}
+    grouped = {"index": [], "concepts": [], "entities": [], "summaries": [], "sources": [], "other": []}
     for md in sorted(paths.wiki_src.rglob("*.md")):
         rel_md = md.relative_to(paths.wiki_src)
         rel = rel_md.with_suffix(".html").as_posix()
@@ -370,8 +370,8 @@ def build_nav(paths: ProjectPaths, *, current: str) -> str:
         grouped[group].append(
             f'<a class="nav-link{extra}{active}" href="{html.escape(href)}">{html.escape(title)}</a>'
         )
-    labels = {"index": "入口", "concepts": "概念", "entities": "实体", "summaries": "摘要", "other": "其他"}
-    for group in ["index", "concepts", "entities", "summaries", "other"]:
+    labels = {"index": "入口", "concepts": "概念", "entities": "实体", "summaries": "摘要", "sources": "原文", "other": "其他"}
+    for group in ["index", "concepts", "entities", "summaries", "sources", "other"]:
         if grouped[group]:
             if group == "index":
                 items.append("".join(grouped[group]))
@@ -401,6 +401,7 @@ TYPE_LABELS = {
     "concept": "概念",
     "entity": "实体",
     "summary": "摘要",
+    "source": "原文",
     "index": "索引",
     "page": "页面",
 }
@@ -550,6 +551,7 @@ body { font-family:var(--sans); color:var(--text); background:var(--bg); display
 .type-concept { background:#7C5E2A; }
 .type-entity  { background:#1A6B7C; }
 .type-summary { background:#2A6B4F; }
+.type-source  { background:#8B5E0B; }
 .type-index   { background:#6B6560; }
 .type-page    { background:var(--navy-light); }
 

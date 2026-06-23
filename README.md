@@ -6,12 +6,24 @@
 
 ## 首版 MVP 能力
 
-- `wiki` lane：吸收 `llm-wiki-demo` 的可演进 Markdown Wiki 做法，由 Claude Code 维护 `index + concepts/entities/summaries + audit/log`，再由 Python 渲染为最终静态 HTML 页面。
+- `wiki` lane：吸收 `llm-wiki-demo` 的可演进 Markdown Wiki 做法，由 Claude Code 维护 `index + concepts/entities/summaries/sources + audit/log`，再由 Python 渲染为最终静态 HTML 页面。
 - `lightrag` lane：从 `corpus/` 准备 LightRAG 输入，并通过 `lightrag-hku` 直接构建 workspace。
 - `artifacts` 协议：写入顶层 `manifest.json`、lane manifest、reports、state、agent plan/summary。
 - 增量基础：扫描 corpus hash，输出 added / modified / deleted change set。
 - Docker 导出：按已存在产物导出 Wiki / LightRAG Dockerfile 与 compose。
 - 完全分离：Wiki 与 LightRAG 可以独立运行、独立更新、独立部署。
+
+## Skill 拆分
+
+Evo Wiki 现在采用主 Skill + 两个 lane 子 Skill 的结构：
+
+| Skill | 职责 | 目录 |
+|---|---|---|
+| 主 Skill | 只做目标判断、lane 路由与边界说明 | `SKILL.md` |
+| Wiki 子 Skill | Wiki 写作、页面结构、HTML 样例、渲染脚本 | `skills/evo-wiki-wiki/` |
+| LightRAG 子 Skill | LightRAG 输入准备、dry-run、构建与删除重建安全协议 | `skills/evo-wiki-lightrag/` |
+
+两个子 Skill 都有独立的 `SKILL.md`、`scripts/` 与 `examples/`。
 
 ## 安装
 
@@ -72,6 +84,7 @@ workspace/artifacts/wiki/wiki-src/
   concepts/
   entities/
   summaries/
+  sources/
 ```
 
 其中：
@@ -80,8 +93,12 @@ workspace/artifacts/wiki/wiki-src/
 - `concepts/` 放概念页，一个概念一个文件。
 - `entities/` 放人物、工具、论文、组织等实体页。
 - `summaries/` 放每个原始资料的摘要页。
+- `sources/` 放原文页，每页必须由「摘要」和「原文内容」组成，并保留完整原文。
+- 导航层级保持：入口 → 概念 → 实体 → 摘要 → 原文 → 其他。
 - 页面之间用 `[[wikilink]]` 交叉引用。
 - 每页用 `## Sources` 标注来源。
+- 概念页、实体页必须严格基于语料做 community summary，不使用模型常识编造。
+- 主要语言必须与语料保持一致；中文语料项目中，页面、提示与说明以中文为主。
 
 2. 调用 Python 渲染：
 
@@ -137,6 +154,23 @@ evo-wiki run --lane both
 
 注意：即使同时运行，两条 lane 的产物、状态、报告仍然分离。
 
+## HTML 样例
+
+完整样例已合并到：
+
+```text
+skills/evo-wiki-wiki/examples/learnbuffett-style/
+```
+
+其中包含中文原始语料 `corpus/raw/`、Wiki 源文件 `artifacts/wiki/wiki-src/`，以及参考 [learnbuffett.com](https://learnbuffett.com/) 风格渲染出的 HTML 成品 `site/`。直接打开 `skills/evo-wiki-wiki/examples/learnbuffett-style/site/index.html` 即可查看页面样例。
+
+该样例演示：
+
+- 导航层级：入口 → 概念 → 实体 → 摘要 → 原文。
+- 原文页：由「摘要」和「原文内容」组成，并保留完整原文。
+- 概念页 / 实体页：严格基于语料做 community summary，不编造语料外事实。
+- 主要语言保持中文一致。
+
 ## 命令
 
 | 命令 | 作用 |
@@ -157,7 +191,10 @@ evo-wiki run --lane both
 evo-wiki/
   src/                    # 工具代码
   tests/                  # 测试
-  SKILL.md                # Claude Code Skill
+  SKILL.md                # 主路由 Skill：只说明 Wiki / LightRAG 子 Skill 如何使用
+  skills/
+    evo-wiki-wiki/        # Wiki lane 子 Skill（SKILL.md / scripts / examples）
+    evo-wiki-lightrag/    # LightRAG lane 子 Skill（SKILL.md / scripts / examples）
   README.md
 
   workspace/              # 默认运行数据根目录，和工具代码分开
@@ -178,6 +215,7 @@ evo-wiki/
           concepts/
           entities/
           summaries/
+          sources/
         audit/
           resolved/
         log/
@@ -201,8 +239,8 @@ Claude Code：
 
 - 理解用户目标。
 - 判断本次是 Wiki-only、LightRAG-only，还是 Wiki-first。
-- 规划 Wiki 页面结构。
-- 基于原始语料生成或更新 `workspace/artifacts/wiki/wiki-src/*.md`。
+- 规划 Wiki 页面结构，包含概念页、实体页、摘要页与原文页。
+- 基于原始语料生成或更新 `workspace/artifacts/wiki/wiki-src/*.md`，其中概念页/实体页必须做基于语料的 community summary，原文页必须保留完整原文。
 - 阅读 reports 并向用户解释风险。
 
 Python：

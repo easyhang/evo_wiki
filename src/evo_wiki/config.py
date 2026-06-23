@@ -42,6 +42,7 @@ DEFAULT_WIKI = {
         "concepts": "concepts/",
         "entities": "entities/",
         "summaries": "summaries/",
+        "sources": "sources/",
         "audit": "audit/",
         "log": "log/",
         "queries": "outputs/queries/",
@@ -50,6 +51,7 @@ DEFAULT_WIKI = {
         "concept": {"target_words": "400-1200", "hard_max_words": 1200},
         "entity": {"target_words": "200-500", "hard_max_words": 500},
         "summary": {"target_words": "150-400", "hard_max_words": 400},
+        "source": {"target_words": "摘要 150-400 + 原文全文", "hard_max_words": None},
     },
     "pages": [
         {
