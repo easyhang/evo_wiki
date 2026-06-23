@@ -3,8 +3,8 @@ name: evo-wiki-wiki
 summary: 生成、维护、渲染可溯源的静态 Wiki 知识库（Wiki lane）。
 description: |
   Evo Wiki 的 Wiki 子 Skill。用于把 corpus/ 原始语料编译成人可读、可探索、可审计的静态 HTML Wiki。
-  必须生成 index / concepts / entities / summaries / sources 页面；概念页与实体页必须严格基于语料做
-  community summary，不得编造；原文页必须由摘要与完整原文组成。
+  必须生成 index / concepts / entities / sources 页面；概念页与实体页必须严格基于语料自然归纳，
+  不得编造；原文页必须在同一页包含摘要与完整原文，并在原文中加入概念/实体链接。
 ---
 
 # Evo Wiki · Wiki 子 Skill
@@ -31,10 +31,12 @@ workspace/artifacts/wiki/
     index.md
     concepts/
     entities/
-    summaries/
     sources/
   dist/
   reports/
+    wiki-report.json
+    wiki-health.json
+  progress.json            # 渲染进度检查点，用于断点续处理
   state/
   audit/
   log/
@@ -55,18 +57,17 @@ workspace/artifacts/wiki/
 1. `index.md`：全局入口 / 索引大厅。
 2. `concepts/*.md`：概念页，一个概念一个文件。
 3. `entities/*.md`：实体页，人物、工具、论文、组织等。
-4. `summaries/*.md`：每篇来源的摘要页。
-5. `sources/*.md`：原文页，必须包含「摘要」与「原文内容」，并保留完整原文。
+4. `sources/*.md`：原文页，必须包含「摘要」与「原文内容」，并保留完整原文（摘要直接附在原文页内，不再单独建摘要页）；原文正文中要给已抽取的概念/实体加 `[[wikilink]]`，渲染后右侧会按概念/实体分组展示这些链接及其在原文中的上下文摘录。
 
 导航层级必须保持：
 
 ```text
-入口 → 概念 → 实体 → 摘要 → 原文 → 其他
+入口 → 概念 → 实体 → 原文 → 其他
 ```
 
-## 4. 语料约束：community summary，禁止编造
+## 4. 语料约束：自然归纳，禁止编造
 
-概念页和实体页必须基于语料做 community summary（社区摘要）：
+概念页和实体页必须基于语料自然归纳，不要把“社区摘要”作为页面卖点或固定标题：
 
 1. **先抽取**：从 `workspace/corpus/` 原始语料抽取候选实体与概念。
 2. **再聚类**：根据共现、引用与上下文，把相关实体 / 概念归成主题社区。
@@ -74,7 +75,7 @@ workspace/artifacts/wiki/
 
 必须遵守：
 
-- 页面中的每条论断都能追溯到 `frontmatter.sources` 和 `## Sources`。
+- 页面正文不需要单独展示 `## Sources`；证据链可保留在 `frontmatter.sources`、报告和审计文件中。
 - 语料没有证据的内容不写；宁可写入 `## 未决问题` 或创建 audit。
 - 推断必须显式标注为推断，不得伪装成事实。
 - 只覆盖语料讨论到的范围，不扩写成通用百科。
@@ -110,9 +111,9 @@ tags:
 
 一句话定义：只写语料中能支撑的定义。
 
-## 语料社区摘要
+## 摘要
 
-综合多个来源中围绕该概念的事实、关系与上下文。
+综合语料中围绕该概念的事实、关系与上下文。
 
 ## 关键性质
 
@@ -127,9 +128,6 @@ tags:
 
 - 语料证据不足或需要后续查证的问题。
 
-## Sources
-
-- `workspace/corpus/raw/source.md`
 ```
 
 ### 6.2 实体页
@@ -146,9 +144,9 @@ sources:
 
 说明这个实体在语料中是什么；不要补充语料之外的传记或背景。
 
-## 语料社区摘要
+## 摘要
 
-综合实体在多个来源中的角色、行为、贡献与相关概念。
+综合语料中该实体的角色、行为、贡献与相关概念。
 
 ## 关联概念
 
@@ -158,44 +156,9 @@ sources:
 
 - 语料没有覆盖、需要后续查证的信息。
 
-## Sources
-
-- `workspace/corpus/raw/source.md`
 ```
 
-### 6.3 摘要页
-
-```markdown
----
-title: "来源文件摘要"
-type: summary
-sources:
-  - workspace/corpus/raw/source.md
----
-
-# 来源文件摘要
-
-**来源**：`workspace/corpus/raw/source.md`
-
-## 主要论点
-
-## 关键要点
-
-## 引用的概念与实体
-
-- [[概念 A]]
-- [[实体 A]]
-
-## 原文入口
-
-- [[来源文件原文]]
-
-## Sources
-
-- `workspace/corpus/raw/source.md`
-```
-
-### 6.4 原文页
+### 6.3 原文页
 
 ````markdown
 ---
@@ -207,23 +170,16 @@ sources:
 
 # 来源文件原文
 
-**来源**：`workspace/corpus/raw/source.md`
-
 ## 摘要
 
 用中文概括原文，只引用原文可支撑内容。
 
 ## 原文内容
 
-```markdown
 # 在这里粘贴完整原文
 
-必须保留原文全文；如果原文很长，也不要删减。
-```
+必须保留原文全文；如果原文很长，也不要删减。对已抽取的概念和实体，用 `[[概念名]]` / `[[实体名]]` 形成内链。
 
-## Sources
-
-- `workspace/corpus/raw/source.md`
 ````
 
 ## 7. 操作流程
@@ -231,12 +187,11 @@ sources:
 ### ingest：摄入资料
 
 1. 阅读 `workspace/corpus/raw/*` 原文。
-2. 创建/更新 `sources/` 原文页（摘要 + 完整原文）。
-3. 创建/更新 `summaries/` 摘要页。
-4. 抽取概念并创建/更新 `concepts/` 页面。
-5. 抽取实体并创建/更新 `entities/` 页面。
-6. 添加 `[[wikilink]]`，更新 `index.md`。
-7. 运行：
+2. 创建/更新 `sources/` 原文页（同一页包含摘要 + 完整原文；原文段落中加入概念/实体 `[[wikilink]]`）。
+3. 抽取概念并创建/更新 `concepts/` 页面。
+4. 抽取实体并创建/更新 `entities/` 页面。
+5. 添加 `[[wikilink]]`，尤其要在原文内容中链接已抽取的概念/实体；更新 `index.md`。
+6. 运行：
 
 ```bash
 evo-wiki run --lane wiki
@@ -271,7 +226,44 @@ evo-wiki render-wiki
 - 明确可修复：修改页面并在 `audit/resolved/` 写 resolved audit。
 - 不确定：在 `audit/` 写 open audit，等待进一步证据。
 
-## 8. 脚本与样例
+## 8. 断点续处理与结束 lint
+
+每次运行 Wiki lane 都会写入：
+
+```text
+workspace/artifacts/wiki/progress.json
+```
+
+该文件用于断点续处理和故障定位，必须记录：
+
+- 当前阶段 `current_phase`。
+- 总页面数 `total_pages`。
+- 已完成页面 `completed_pages`。
+- 失败页面 `failed_pages`。
+- lint 阶段与 lint 结果。
+- `resume_hint`，提示下一步从哪里恢复。
+
+如果渲染中断，Claude Code 应先读取 `progress.json`，再决定从哪一页、哪一类检查或哪一阶段继续，不要盲目重写全部页面。
+
+Wiki 结束时必须运行 lint，并读取：
+
+```text
+workspace/artifacts/wiki/reports/wiki-health.json
+workspace/artifacts/wiki/reports/wiki-report.json
+```
+
+lint 必须覆盖：
+
+- 死链与孤儿页。
+- 页面是否被 `index.md` 收录。
+- 页面类型与目录是否一致。
+- 重复标题与概念 / 实体别名冲突。
+- 原文页是否包含「摘要」与「原文内容」。
+- audit / log 形状是否符合约定。
+
+发现概念冲突时，应优先判断是同义合并、重命名消歧，还是保留两个不同概念并补充上下文说明。
+
+## 9. 脚本与样例
 
 本 Skill 自带：
 

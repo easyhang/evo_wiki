@@ -17,7 +17,7 @@ from evo_wiki.lightrag_lane import build_lightrag
 from evo_wiki.paths import ProjectPaths
 from evo_wiki.utils import write_json
 from evo_wiki.wiki import markdown_to_html, parse_sources, render_wiki
-from evo_wiki.wiki_health import parse_yaml_frontmatter
+from evo_wiki.wiki_health import lint_wiki_artifacts, parse_yaml_frontmatter
 
 
 def make_file(root: Path, rel: str, content: str) -> None:
@@ -187,10 +187,18 @@ def test_source_pages_render_with_source_type_and_nav_group(tmp_path: Path):
         "---\ntitle: 首页\ntype: index\nsources: []\n---\n\n# 首页\n\n- [[原文页]]\n",
         encoding="utf-8",
     )
+    (paths.wiki_src / "concepts" / "moat.md").write_text(
+        "---\ntitle: 护城河\ntype: concept\n---\n\n# 护城河\n\n## 摘要\n\n基于语料归纳。\n",
+        encoding="utf-8",
+    )
+    (paths.wiki_src / "entities" / "buffett.md").write_text(
+        "---\ntitle: 沃伦·巴菲特\ntype: entity\n---\n\n# 沃伦·巴菲特\n\n## 摘要\n\n语料中的人物。\n",
+        encoding="utf-8",
+    )
     source = paths.wiki_src / "sources" / "doc.md"
     source.write_text(
-        "---\ntitle: 原文页\ntype: source\nsources:\n  - corpus/raw/doc.md\n---\n\n"
-        "# 原文页\n\n## 摘要\n\n基于原文。\n\n## 原文内容\n\n```text\n完整原文\n```\n\n## Sources\n\n- `corpus/raw/doc.md`\n",
+        "---\ntitle: 原文页\ntype: source\n---\n\n"
+        "# 原文页\n\n## 摘要\n\n基于原文。\n\n## 原文内容\n\n完整原文提到 [[护城河]] 与 [[沃伦·巴菲特]]。\n",
         encoding="utf-8",
     )
     report = render_wiki(paths, EvoConfig())
@@ -198,5 +206,61 @@ def test_source_pages_render_with_source_type_and_nav_group(tmp_path: Path):
 
     assert report["status"] == "success"
     assert '<span class="type-badge type-source">原文</span>' in html
-    assert '<div class="nav-group-title">原文</div>' in html
-    assert "完整原文" in html
+    assert '<details class="nav-group" open><summary class="nav-group-title"><span>原文</span>' in html
+    assert 'href="../concepts/moat.html">护城河</a>' in html
+    assert 'href="../entities/buffett.html">沃伦·巴菲特</a>' in html
+    assert '<aside class="page-aside"><div class="related-panel">' in html
+    assert "链接到本页" in html
+    assert "## Sources" not in html
+
+
+def test_render_wiki_writes_progress_and_lint_metadata(tmp_path: Path):
+    paths = ProjectPaths.from_root(tmp_path)
+    paths.ensure_base_dirs()
+    (paths.wiki_src / "index.md").write_text(
+        "---\ntitle: 首页\ntype: index\nsources: []\n---\n\n# 首页\n\n- [[概念页]]\n",
+        encoding="utf-8",
+    )
+    (paths.wiki_src / "concepts" / "concept.md").write_text(
+        "---\ntitle: 概念页\ntype: concept\nsources:\n  - corpus/raw/doc.md\n---\n\n# 概念页\n\n## 摘要\n\n基于语料归纳。\n",
+        encoding="utf-8",
+    )
+
+    report = render_wiki(paths, EvoConfig())
+    progress = json.loads((paths.wiki / "progress.json").read_text(encoding="utf-8"))
+    manifest = json.loads((paths.wiki / "manifest.json").read_text(encoding="utf-8"))
+
+    assert progress["status"] == "success"
+    assert progress["current_phase"] == "complete"
+    assert len(progress["completed_pages"]) == report["page_count"]
+    assert any(phase["phase"] == "lint_wiki" for phase in progress["phases"])
+    assert report["progress"] == "artifacts/wiki/progress.json"
+    assert report["lint"]["report"] == "artifacts/wiki/reports/wiki-health.json"
+    assert manifest["progress"] == "artifacts/wiki/progress.json"
+    assert manifest["lint_report"] == "artifacts/wiki/reports/wiki-health.json"
+
+
+def test_lint_detects_concept_conflict_and_bad_source_page(tmp_path: Path):
+    paths = ProjectPaths.from_root(tmp_path)
+    paths.ensure_base_dirs()
+    (paths.wiki_src / "index.md").write_text("# 首页\n\n- [[重复概念]]\n", encoding="utf-8")
+    (paths.wiki_src / "concepts" / "a.md").write_text(
+        "---\ntitle: 重复概念\ntype: concept\nsources: []\n---\n\n# 重复概念\n",
+        encoding="utf-8",
+    )
+    (paths.wiki_src / "concepts" / "b.md").write_text(
+        "---\ntitle: 重复概念\ntype: concept\nsources: []\n---\n\n# 重复概念\n",
+        encoding="utf-8",
+    )
+    (paths.wiki_src / "sources" / "bad.md").write_text(
+        "---\ntitle: 坏原文页\ntype: source\nsources: []\n---\n\n# 坏原文页\n\n没有标准结构。\n",
+        encoding="utf-8",
+    )
+
+    health = lint_wiki_artifacts(paths.root, paths.wiki_src, paths.wiki_audit, paths.wiki_log)
+    codes = {issue["code"] for issue in health["issues"]}
+
+    assert "concept_conflict" in codes
+    assert "duplicate_page_title" in codes
+    assert "source_missing_summary" in codes
+    assert "source_missing_original" in codes

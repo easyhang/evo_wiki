@@ -64,7 +64,6 @@ class ProjectPaths:
             self.wiki_src,
             self.wiki_src / "concepts",
             self.wiki_src / "entities",
-            self.wiki_src / "summaries",
             self.wiki_src / "sources",
             self.wiki_dist,
             self.wiki_reports,

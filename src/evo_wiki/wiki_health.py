@@ -49,6 +49,10 @@ def lint_wiki_artifacts(root: Path, wiki_src: Path, audit_dir: Path, log_dir: Pa
     issues.extend(pass_orphan_pages(root, wiki_src, stem_map))
     issues.extend(pass_missing_index_entries(root, wiki_src, stem_map))
     issues.extend(pass_unlinked_concepts(root, wiki_src, stem_map))
+    issues.extend(pass_page_type_consistency(root, wiki_src))
+    issues.extend(pass_duplicate_page_titles(root, wiki_src))
+    issues.extend(pass_concept_conflicts(root, wiki_src))
+    issues.extend(pass_source_page_structure(root, wiki_src))
     issues.extend(pass_audit_shape(root, audit_dir))
     issues.extend(pass_audit_targets(root, audit_dir))
     issues.extend(pass_log_shape(root, log_dir))
@@ -126,6 +130,39 @@ def parse_yaml_frontmatter(text: str) -> dict[str, object] | None:
     return None
 
 
+def markdown_body(text: str) -> str:
+    lines = text.splitlines()
+    if not lines or lines[0].strip() != "---":
+        return text
+    for idx in range(1, len(lines)):
+        if lines[idx].strip() == "---":
+            return "\n".join(lines[idx + 1 :]).lstrip("\n")
+    return text
+
+
+def expected_page_type(path: Path, wiki_src: Path) -> str:
+    try:
+        rel = path.relative_to(wiki_src)
+    except ValueError:
+        return "page"
+    if rel.name == "index.md" and rel.parent == Path("."):
+        return "index"
+    if rel.parts and rel.parts[0] in {"concepts", "entities", "sources"}:
+        return {"concepts": "concept", "entities": "entity", "sources": "source"}[rel.parts[0]]
+    return "page"
+
+
+def page_title(path: Path) -> str:
+    text = read_text_safe(path)
+    fields = parse_yaml_frontmatter(text) or {}
+    title = fields.get("title")
+    if isinstance(title, str) and title.strip():
+        return title.strip()
+    for line in markdown_body(text).splitlines():
+        if line.startswith("# "):
+            return line[2:].strip()
+    return path.stem
+
 def pass_dead_wikilinks(root: Path, wiki_src: Path, stem_map: dict[str, Path]) -> list[HealthIssue]:
     issues: list[HealthIssue] = []
     for md in collect_md_files(wiki_src):
@@ -185,6 +222,79 @@ def pass_unlinked_concepts(root: Path, wiki_src: Path, stem_map: dict[str, Path]
             continue
         if slugify(term) not in stem_map and term.lower() not in linked and slugify(term) not in linked:
             issues.append(HealthIssue("info", "unlinked_concept", f'Potential concept "{term}" appears {count} times without a page'))
+    return issues
+
+
+def pass_page_type_consistency(root: Path, wiki_src: Path) -> list[HealthIssue]:
+    issues: list[HealthIssue] = []
+    for md in collect_md_files(wiki_src):
+        fields = parse_yaml_frontmatter(read_text_safe(md)) or {}
+        declared = fields.get("type")
+        expected = expected_page_type(md, wiki_src)
+        if isinstance(declared, str) and declared and declared != expected:
+            issues.append(
+                HealthIssue(
+                    "warn",
+                    "page_type_mismatch",
+                    f"Frontmatter type '{declared}' does not match path-implied type '{expected}'",
+                    relpath(md, root),
+                )
+            )
+    return issues
+
+
+def pass_duplicate_page_titles(root: Path, wiki_src: Path) -> list[HealthIssue]:
+    by_slug: dict[str, list[Path]] = {}
+    for md in collect_md_files(wiki_src):
+        by_slug.setdefault(slugify(page_title(md)), []).append(md)
+    issues: list[HealthIssue] = []
+    for title_slug, paths in sorted(by_slug.items()):
+        if len(paths) <= 1:
+            continue
+        issues.append(
+            HealthIssue(
+                "warn",
+                "duplicate_page_title",
+                f"Duplicate or conflicting page title slug '{title_slug}' appears in multiple pages",
+                ", ".join(relpath(path, root) for path in paths),
+            )
+        )
+    return issues
+
+
+def pass_concept_conflicts(root: Path, wiki_src: Path) -> list[HealthIssue]:
+    concept_like = [md for md in collect_md_files(wiki_src) if expected_page_type(md, wiki_src) in {"concept", "entity"}]
+    by_alias: dict[str, list[Path]] = {}
+    for md in concept_like:
+        aliases = {md.stem.lower(), slugify(md.stem), page_title(md).lower(), slugify(page_title(md))}
+        for alias in aliases:
+            by_alias.setdefault(alias, []).append(md)
+    issues: list[HealthIssue] = []
+    for alias, paths in sorted(by_alias.items()):
+        unique_paths = sorted(set(paths))
+        if len(unique_paths) <= 1:
+            continue
+        issues.append(
+            HealthIssue(
+                "warn",
+                "concept_conflict",
+                f"Concept/entity alias '{alias}' resolves to multiple pages; merge, rename, or disambiguate",
+                ", ".join(relpath(path, root) for path in unique_paths),
+            )
+        )
+    return issues
+
+
+def pass_source_page_structure(root: Path, wiki_src: Path) -> list[HealthIssue]:
+    issues: list[HealthIssue] = []
+    for md in collect_md_files(wiki_src):
+        if expected_page_type(md, wiki_src) != "source":
+            continue
+        body = markdown_body(read_text_safe(md))
+        if "## 摘要" not in body and "## Summary" not in body:
+            issues.append(HealthIssue("error", "source_missing_summary", "Source page must include a summary section", relpath(md, root)))
+        if "## 原文内容" not in body and "## Original" not in body:
+            issues.append(HealthIssue("error", "source_missing_original", "Source page must include original content", relpath(md, root)))
     return issues
 
 

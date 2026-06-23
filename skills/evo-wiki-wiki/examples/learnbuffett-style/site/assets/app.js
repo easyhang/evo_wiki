@@ -19,7 +19,17 @@ async function initSearch(){
     });
   });
 }
+function initRelatedPanel(){
+  document.querySelectorAll('.related-panel').forEach(panel => {
+    const items = Array.from(panel.querySelectorAll('details'));
+    const expand = panel.querySelector('[data-related-expand]');
+    const collapse = panel.querySelector('[data-related-collapse]');
+    if(expand) expand.addEventListener('click', () => items.forEach(d => d.open = true));
+    if(collapse) collapse.addEventListener('click', () => items.forEach(d => d.open = false));
+  });
+}
 function initEnhancements(){
+  initRelatedPanel();
   if(window.mermaid) mermaid.initialize({ startOnLoad: true, theme: 'default' });
   if(window.renderMathInElement) renderMathInElement(document.body, { delimiters: [
     {left: '$$', right: '$$', display: true},

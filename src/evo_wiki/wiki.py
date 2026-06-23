@@ -29,7 +29,7 @@ class WikiPage:
 def ensure_wiki_stub(paths: ProjectPaths, config: EvoConfig) -> None:
     """Create llm-wiki-style starter wiki-src files for Claude Code to edit."""
     paths.wiki_src.mkdir(parents=True, exist_ok=True)
-    for subdir in ["concepts", "entities", "summaries", "sources"]:
+    for subdir in ["concepts", "entities", "sources"]:
         (paths.wiki_src / subdir).mkdir(parents=True, exist_ok=True)
     for page in config.wiki.get("pages", []):
         rel = page.get("path", "index.md")
@@ -39,9 +39,7 @@ def ensure_wiki_stub(paths: ProjectPaths, config: EvoConfig) -> None:
         target.parent.mkdir(parents=True, exist_ok=True)
         title = page.get("title") or Path(rel).stem.replace("-", " ").title()
         page_type = page.get("type", infer_page_type(target, paths.wiki_src))
-        description = page.get("description", "Claude Code should replace this stub with sourced content.")
-        sources = page.get("sources", [])
-        source_lines = "\n".join(f"- `{src}`" for src in sources) or "- 待 Claude Code 绑定来源"
+        description = page.get("description", "Claude Code should replace this stub with corpus-grounded content.")
         target.write_text(
             "---\n"
             f'title: "{title}"\n'
@@ -54,68 +52,150 @@ def ensure_wiki_stub(paths: ProjectPaths, config: EvoConfig) -> None:
             f"# {title}\n\n"
             f"> {description}\n\n"
             "<!-- evo:agent-content:start -->\n"
-            "本页是 Evo wiki 生成的占位页。请让 Claude Code 基于 corpus 原始语料补全内容。\n"
-            "<!-- evo:agent-content:end -->\n\n"
-            "## Sources\n\n"
-            f"{source_lines}\n",
+            "本页是 Evo wiki 生成的占位页。请让 Claude Code 基于 corpus 原始语料补全内容；页面中不需要单独标明来源。\n"
+            "<!-- evo:agent-content:end -->\n",
             encoding="utf-8",
         )
 
 
+def update_wiki_progress(paths: ProjectPaths, progress: dict, phase: str, status: str, **updates: object) -> None:
+    """Write a resumable progress checkpoint for Wiki rendering.
+
+    该文件不是自动续跑引擎，而是给 Claude Code/用户断点续处理用的检查点：
+    可以看出已完成哪些页面、卡在哪个阶段、下一步应从哪里恢复。
+    """
+    now = utc_now()
+    progress.setdefault("started_at", now)
+    progress["updated_at"] = now
+    progress["status"] = status
+    progress["current_phase"] = phase
+    progress.update(updates)
+    phases = progress.setdefault("phases", [])
+    if isinstance(phases, list):
+        phases.append({"phase": phase, "status": status, "at": now, **updates})
+    write_json(paths.wiki / "progress.json", progress)
+
+
 def render_wiki(paths: ProjectPaths, config: EvoConfig) -> dict:
-    ensure_wiki_stub(paths, config)
-    if paths.wiki_dist.exists():
-        shutil.rmtree(paths.wiki_dist)
-    paths.wiki_dist.mkdir(parents=True, exist_ok=True)
-    (paths.wiki_dist / "assets").mkdir(parents=True, exist_ok=True)
-
-    markdown_files = sorted(paths.wiki_src.rglob("*.md"))
-    link_map = build_link_map(paths, markdown_files)
-    pages = [render_page(paths, config, md, link_map) for md in markdown_files]
-    write_assets(paths)
-    write_search_index(paths, pages)
-    write_dependency_graph(paths, pages, link_map)
-    health = lint_wiki_artifacts(paths.root, paths.wiki_src, paths.wiki_audit, paths.wiki_log)
-    write_json(paths.wiki_reports / "wiki-health.json", health)
-
-    report = {
-        "status": "success" if health["status"] in {"clean", "issues_found"} else "failed",
-        "generated_at": utc_now(),
-        "page_count": len(pages),
-        "html_output": relpath(paths.wiki_dist / "index.html", paths.root),
-        "llm_wiki_model": {
-            "layout": "index + concepts/entities/summaries/sources + audit/log/queries",
-            "final_output": "static_html",
-            "renderer": "evo_wiki.wiki",
-        },
-        "pages": [
-            {
-                "source": relpath(page.source, paths.root),
-                "output": relpath(page.output, paths.root),
-                "title": page.title,
-                "type": page.page_type,
-                "word_count": page.word_count,
-                "sources": page.sources,
-                "links": page.links,
-            }
-            for page in pages
-        ],
-        "health": health,
-        "warnings": collect_warnings(paths, pages, health),
+    progress: dict = {
+        "schema_version": 1,
+        "lane": "wiki",
+        "status": "running",
+        "completed_pages": [],
+        "failed_pages": [],
+        "resume_hint": "Inspect completed_pages and current_phase; rerun evo-wiki render-wiki after fixing the failed phase.",
     }
-    write_json(paths.wiki_reports / "wiki-report.json", report)
-    write_json(
-        paths.wiki / "manifest.json",
-        {
-            "status": "success",
-            "generated_at": report["generated_at"],
-            "output": relpath(paths.wiki_dist / "index.html", paths.root),
+    update_wiki_progress(paths, progress, "start", "running")
+    try:
+        ensure_wiki_stub(paths, config)
+        update_wiki_progress(paths, progress, "ensure_wiki_stub", "running")
+        if paths.wiki_dist.exists():
+            shutil.rmtree(paths.wiki_dist)
+        paths.wiki_dist.mkdir(parents=True, exist_ok=True)
+        (paths.wiki_dist / "assets").mkdir(parents=True, exist_ok=True)
+        update_wiki_progress(paths, progress, "prepare_dist", "running")
+
+        markdown_files = sorted(paths.wiki_src.rglob("*.md"))
+        progress["total_pages"] = len(markdown_files)
+        progress["source_files"] = [relpath(path, paths.root) for path in markdown_files]
+        update_wiki_progress(paths, progress, "scan_wiki_src", "running", total_pages=len(markdown_files))
+
+        link_map = build_link_map(paths, markdown_files)
+        page_index = build_page_index(paths, markdown_files)
+        update_wiki_progress(paths, progress, "build_link_map", "running", link_alias_count=len(link_map))
+
+        pages: list[WikiPage] = []
+        for index, md in enumerate(markdown_files, start=1):
+            try:
+                page = render_page(paths, config, md, link_map, page_index)
+            except Exception as exc:
+                failed = {"source": relpath(md, paths.root), "error": str(exc)}
+                progress.setdefault("failed_pages", []).append(failed)
+                update_wiki_progress(paths, progress, "render_pages", "failed", failed_page=failed, rendered_pages=len(pages))
+                raise
+            pages.append(page)
+            progress.setdefault("completed_pages", []).append(
+                {"source": relpath(page.source, paths.root), "output": relpath(page.output, paths.root), "title": page.title, "type": page.page_type}
+            )
+            update_wiki_progress(paths, progress, "render_pages", "running", rendered_pages=index, total_pages=len(markdown_files))
+
+        write_assets(paths)
+        update_wiki_progress(paths, progress, "write_assets", "running")
+        write_search_index(paths, pages)
+        update_wiki_progress(paths, progress, "write_search_index", "running", search_entries=len(pages))
+        write_dependency_graph(paths, pages, link_map)
+        update_wiki_progress(paths, progress, "write_dependency_graph", "running")
+
+        # 结束阶段必须 lint：页面一致性、链接、孤儿页、索引收录、概念冲突、原文页结构等都在这里汇总。
+        health = lint_wiki_artifacts(paths.root, paths.wiki_src, paths.wiki_audit, paths.wiki_log)
+        write_json(paths.wiki_reports / "wiki-health.json", health)
+        update_wiki_progress(
+            paths,
+            progress,
+            "lint_wiki",
+            "running",
+            lint_status=health["status"],
+            lint_issue_count=health["issue_count"],
+        )
+
+        report = {
+            "status": "success" if health["status"] in {"clean", "issues_found"} else "failed",
+            "generated_at": utc_now(),
             "page_count": len(pages),
-            "health_status": health["status"],
-            "health_issue_count": health["issue_count"],
-        },
-    )
-    return report
+            "html_output": relpath(paths.wiki_dist / "index.html", paths.root),
+            "progress": relpath(paths.wiki / "progress.json", paths.root),
+            "lint": {
+                "status": health["status"],
+                "issue_count": health["issue_count"],
+                "report": relpath(paths.wiki_reports / "wiki-health.json", paths.root),
+            },
+            "llm_wiki_model": {
+                "layout": "index + concepts/entities/sources + audit/log/queries",
+                "final_output": "static_html",
+                "renderer": "evo_wiki.wiki",
+            },
+            "pages": [
+                {
+                    "source": relpath(page.source, paths.root),
+                    "output": relpath(page.output, paths.root),
+                    "title": page.title,
+                    "type": page.page_type,
+                    "word_count": page.word_count,
+                    "sources": page.sources,
+                    "links": page.links,
+                }
+                for page in pages
+            ],
+            "health": health,
+            "warnings": collect_warnings(paths, pages, health),
+        }
+        write_json(paths.wiki_reports / "wiki-report.json", report)
+        write_json(
+            paths.wiki / "manifest.json",
+            {
+                "status": "success",
+                "generated_at": report["generated_at"],
+                "output": relpath(paths.wiki_dist / "index.html", paths.root),
+                "page_count": len(pages),
+                "progress": relpath(paths.wiki / "progress.json", paths.root),
+                "lint_report": relpath(paths.wiki_reports / "wiki-health.json", paths.root),
+                "health_status": health["status"],
+                "health_issue_count": health["issue_count"],
+            },
+        )
+        update_wiki_progress(
+            paths,
+            progress,
+            "complete",
+            "success",
+            report=relpath(paths.wiki_reports / "wiki-report.json", paths.root),
+            lint_status=health["status"],
+            lint_issue_count=health["issue_count"],
+        )
+        return report
+    except Exception as exc:
+        update_wiki_progress(paths, progress, progress.get("current_phase", "unknown"), "failed", error=str(exc))
+        raise
 
 
 def build_link_map(paths: ProjectPaths, markdown_files: list[Path]) -> dict[str, str]:
@@ -134,21 +214,41 @@ def build_link_map(paths: ProjectPaths, markdown_files: list[Path]) -> dict[str,
     return mapping
 
 
-def render_page(paths: ProjectPaths, config: EvoConfig, md_path: Path, link_map: dict[str, str]) -> WikiPage:
+def build_page_index(paths: ProjectPaths, markdown_files: list[Path]) -> dict[str, dict[str, str]]:
+    index: dict[str, dict[str, str]] = {}
+    for md in markdown_files:
+        rel_html = md.relative_to(paths.wiki_src).with_suffix(".html").as_posix()
+        raw = md.read_text(encoding="utf-8")
+        frontmatter, body = split_frontmatter(raw)
+        title = str(frontmatter.get("title") or extract_title(body) or md.stem)
+        page_type = str(frontmatter.get("type") or infer_page_type(md, paths.wiki_src))
+        meta = {"title": title, "type": page_type, "path": rel_html}
+        aliases = {md.stem.lower(), slugify(md.stem), title.lower(), slugify(title)}
+        if md.name == "index.md" and md.parent != paths.wiki_src:
+            aliases.add(md.parent.name.lower())
+            aliases.add(slugify(md.parent.name))
+        for alias in aliases:
+            index[alias] = meta
+    return index
+
+
+def render_page(paths: ProjectPaths, config: EvoConfig, md_path: Path, link_map: dict[str, str], page_index: dict[str, dict[str, str]]) -> WikiPage:
     raw = md_path.read_text(encoding="utf-8")
     frontmatter, markdown = split_frontmatter(raw)
     title = str(frontmatter.get("title") or extract_title(markdown) or md_path.stem.replace("-", " ").title())
     page_type = str(frontmatter.get("type") or infer_page_type(md_path, paths.wiki_src))
     rel = md_path.relative_to(paths.wiki_src).with_suffix(".html")
-    resolver = make_link_resolver(current=rel.as_posix(), link_map=link_map)
+    current = rel.as_posix()
+    resolver = make_link_resolver(current=current, link_map=link_map)
     body = markdown_to_html(markdown, resolver=resolver)
+    links = sorted(set(extract_wikilinks(markdown)))
     out = paths.wiki_dist / rel
     out.parent.mkdir(parents=True, exist_ok=True)
-    nav = build_nav(paths, current=rel.as_posix())
-    html_doc = page_template(config, title, nav, body, current=rel.as_posix(), page_type=page_type)
+    nav = build_nav(paths, current=current)
+    aside = source_related_panel(markdown, links, current, page_index) if page_type == "source" else ""
+    html_doc = page_template(config, title, nav, body, current=current, page_type=page_type, aside=aside)
     out.write_text(html_doc, encoding="utf-8")
     text = strip_markdown(markdown)
-    links = sorted(set(extract_wikilinks(markdown)))
     return WikiPage(
         source=md_path,
         output=out,
@@ -178,8 +278,8 @@ def infer_page_type(path: Path, wiki_src: Path) -> str:
         rel = path.relative_to(wiki_src)
     except ValueError:
         return "page"
-    if rel.parts and rel.parts[0] in {"concepts", "entities", "summaries", "sources"}:
-        return {"concepts": "concept", "entities": "entity", "summaries": "summary", "sources": "source"}[rel.parts[0]]
+    if rel.parts and rel.parts[0] in {"concepts", "entities", "sources"}:
+        return {"concepts": "concept", "entities": "entity", "sources": "source"}[rel.parts[0]]
     if rel.name == "index.md":
         return "index"
     return "page"
@@ -352,9 +452,125 @@ def make_link_resolver(*, current: str, link_map: dict[str, str]) -> Callable[[s
     return resolve
 
 
+_WIKILINK_RE = re.compile(r"\[\[([^\]|]+)(?:\|([^\]]+))?\]\]")
+_SENTENCE_ENDERS = "。！？!?；;\n"
+_MAX_EXCERPTS_PER_LINK = 2
+
+
+def _original_section(markdown: str) -> str:
+    """Return the source page's original-content section, falling back to full text."""
+    heading = re.search(r"^##\s*(原文内容|Original.*)\s*$", markdown, flags=re.M)
+    if not heading:
+        return markdown
+    start = heading.end()
+    nxt = re.search(r"^##\s", markdown[start:], flags=re.M)
+    end = start + nxt.start() if nxt else len(markdown)
+    return markdown[start:end]
+
+
+def _sentence_around(text: str, start: int, end: int) -> str:
+    left = start
+    while left > 0 and text[left - 1] not in _SENTENCE_ENDERS:
+        left -= 1
+    right = end
+    while right < len(text) and text[right] not in _SENTENCE_ENDERS:
+        right += 1
+    if right < len(text):
+        right += 1
+    return text[left:right].strip()
+
+
+def _wikilink_plain(text: str) -> str:
+    return _WIKILINK_RE.sub(lambda m: (m.group(2) or m.group(1)).strip(), text)
+
+
+def _excerpt_html(snippet: str, label: str) -> str:
+    plain = _wikilink_plain(snippet)
+    escaped = html.escape(plain)
+    esc_label = html.escape(label)
+    if esc_label:
+        escaped = re.sub(
+            re.escape(esc_label),
+            f'<mark class="related-hit">{esc_label}</mark>',
+            escaped,
+        )
+    return escaped
+
+
+def source_related_panel(markdown: str, links: list[str], current: str, page_index: dict[str, dict[str, str]]) -> str:
+    original = _original_section(markdown)
+    # 1. 按概念/实体分桶，记录每个被链接页面在原文中的出现上下文。
+    groups: dict[str, dict[str, dict]] = {"concept": {}, "entity": {}}
+    for match in _WIKILINK_RE.finditer(original):
+        target = match.group(1).strip()
+        label = (match.group(2) or target).strip()
+        meta = page_index.get(target.lower()) or page_index.get(slugify(target))
+        if not meta or meta.get("type") not in groups:
+            continue
+        bucket = groups[meta["type"]]
+        entry = bucket.setdefault(meta["path"], {"meta": meta, "excerpts": []})
+        sentence = _sentence_around(original, match.start(), match.end())
+        if sentence:
+            entry["excerpts"].append(_excerpt_html(sentence, label))
+
+    # 2. 兜底：frontmatter/正文里声明了链接但原文未命中，也列出（无上下文摘录）。
+    for link in links:
+        meta = page_index.get(link.lower()) or page_index.get(slugify(link))
+        if not meta or meta.get("type") not in groups:
+            continue
+        groups[meta["type"]].setdefault(meta["path"], {"meta": meta, "excerpts": []})
+
+    if not groups["concept"] and not groups["entity"]:
+        return ""
+
+    labels = {"concept": "概念", "entity": "实体"}
+    total = len(groups["concept"]) + len(groups["entity"])
+    sections = []
+    for group in ["concept", "entity"]:
+        entries = groups[group]
+        if not entries:
+            continue
+        items = []
+        for entry in sorted(entries.values(), key=lambda item: item["meta"]["title"]):
+            meta = entry["meta"]
+            href = relpath_from(current, meta["path"])
+            excerpts = entry["excerpts"]
+            mentions = len(excerpts)
+            count_label = f'<span class="related-mentions">{mentions} 处</span>' if mentions else ""
+            body_parts = [
+                f'<p class="related-excerpt">{exc}</p>'
+                for exc in excerpts[:_MAX_EXCERPTS_PER_LINK]
+            ]
+            if mentions > _MAX_EXCERPTS_PER_LINK:
+                body_parts.append(
+                    f'<p class="related-more">…还有 {mentions - _MAX_EXCERPTS_PER_LINK} 处提及</p>'
+                )
+            body_parts.append(
+                f'<a class="related-original-link" href="{html.escape(href)}">查看原文 →</a>'
+            )
+            items.append(
+                f'<details class="related-item related-{group}" open>'
+                f'<summary class="related-item-head"><span class="related-item-title">{html.escape(meta["title"])}</span>{count_label}</summary>'
+                f'<div class="related-item-body">{"".join(body_parts)}</div>'
+                "</details>"
+            )
+        sections.append(
+            f'<details class="related-section" open><summary>{labels[group]} <span class="related-count">{len(entries)}</span></summary>'
+            f'<div class="related-items">{"".join(items)}</div></details>'
+        )
+
+    return (
+        '<aside class="page-aside"><div class="related-panel">'
+        f'<div class="related-title"><span>链接到本页 <span class="related-total">{total}</span></span>'
+        '<span class="related-actions"><button type="button" data-related-expand>展开</button><button type="button" data-related-collapse>折叠</button></span></div>'
+        + "".join(sections)
+        + "</div></aside>"
+    )
+
+
 def build_nav(paths: ProjectPaths, *, current: str) -> str:
     items = []
-    grouped = {"index": [], "concepts": [], "entities": [], "summaries": [], "sources": [], "other": []}
+    grouped = {"index": [], "concepts": [], "entities": [], "sources": [], "other": []}
     for md in sorted(paths.wiki_src.rglob("*.md")):
         rel_md = md.relative_to(paths.wiki_src)
         rel = rel_md.with_suffix(".html").as_posix()
@@ -370,16 +586,18 @@ def build_nav(paths: ProjectPaths, *, current: str) -> str:
         grouped[group].append(
             f'<a class="nav-link{extra}{active}" href="{html.escape(href)}">{html.escape(title)}</a>'
         )
-    labels = {"index": "入口", "concepts": "概念", "entities": "实体", "summaries": "摘要", "sources": "原文", "other": "其他"}
-    for group in ["index", "concepts", "entities", "summaries", "sources", "other"]:
+    labels = {"index": "入口", "concepts": "概念", "entities": "实体", "sources": "原文", "other": "其他"}
+    for group in ["index", "concepts", "entities", "sources", "other"]:
         if grouped[group]:
             if group == "index":
                 items.append("".join(grouped[group]))
             else:
+                count = len(grouped[group])
                 items.append(
-                    f'<div class="nav-group"><div class="nav-group-title">{labels[group]}</div>'
+                    f'<details class="nav-group" open><summary class="nav-group-title"><span>{labels[group]}</span><span class="nav-count">{count}</span></summary>'
+                    + '<div class="nav-group-links">'
                     + "".join(grouped[group])
-                    + "</div>"
+                    + "</div></details>"
                 )
     return "\n".join(items)
 
@@ -400,7 +618,6 @@ def asset_prefix(current: str) -> str:
 TYPE_LABELS = {
     "concept": "概念",
     "entity": "实体",
-    "summary": "摘要",
     "source": "原文",
     "index": "索引",
     "page": "页面",
@@ -418,7 +635,7 @@ def type_badge(page_type: str) -> str:
     )
 
 
-def page_template(config: EvoConfig, title: str, nav: str, body: str, *, current: str, page_type: str) -> str:
+def page_template(config: EvoConfig, title: str, nav: str, body: str, *, current: str, page_type: str, aside: str = "") -> str:
     site_title = html.escape(config.wiki.get("title", "Evo Wiki"))
     prefix = asset_prefix(current)
     home_href = f"{prefix}index.html"
@@ -451,7 +668,10 @@ def page_template(config: EvoConfig, title: str, nav: str, body: str, *, current
     <nav class="sidebar-nav">{nav}</nav>
   </aside>
   <main class="main">
-    <article class="article">{meta}{body}</article>
+    <div class="content-shell">
+      <article class="article">{meta}{body}</article>
+      {aside}
+    </div>
   </main>
 </body>
 </html>
@@ -496,9 +716,7 @@ def collect_warnings(paths: ProjectPaths, pages: list[WikiPage], health: dict) -
         warnings.append({"code": "no_pages", "message": "artifacts/wiki/wiki-src has no Markdown pages."})
     for page in pages:
         if "占位页" in page.text or "待 Claude Code" in page.text:
-            warnings.append({"code": "stub_content", "page": relpath(page.source, paths.root), "message": "Page still looks like a stub; ask Claude Code to generate sourced content."})
-        if not page.sources and page.page_type not in {"index"}:
-            warnings.append({"code": "missing_sources", "page": relpath(page.source, paths.root), "message": "Page has no source references."})
+            warnings.append({"code": "stub_content", "page": relpath(page.source, paths.root), "message": "Page still looks like a stub; ask Claude Code to generate complete content."})
     for issue in health.get("issues", []):
         if issue.get("severity") in {"error", "warn"}:
             warnings.append({"code": issue.get("code"), "page": issue.get("path"), "message": issue.get("message")})
@@ -541,16 +759,49 @@ body { font-family:var(--sans); color:var(--text); background:var(--bg); display
 .nav-link.active { color:#fff; background:rgba(184,134,11,.15); border-left-color:var(--gold); font-weight:600; }
 .nav-link.nav-home { font-size:14px; padding:10px 16px; font-weight:500; }
 .nav-group { margin-bottom:4px; }
-.nav-group-title { padding:10px 16px 6px; color:#cbd5e1; font-size:12px; font-weight:600; text-transform:uppercase; letter-spacing:.5px; }
+.nav-group-title { list-style:none; cursor:pointer; display:flex; align-items:center; justify-content:space-between; gap:8px; padding:10px 16px 6px; color:#cbd5e1; font-size:12px; font-weight:600; text-transform:uppercase; letter-spacing:.5px; }
+.nav-group-title::-webkit-details-marker { display:none; }
+.nav-group-title::before { content:'▾'; color:var(--gold-light); margin-right:6px; transition:transform .16s ease; }
+.nav-group:not([open]) .nav-group-title::before { transform:rotate(-90deg); }
+.nav-count { min-width:22px; padding:1px 7px; border-radius:999px; background:rgba(255,255,255,.08); color:#e5e7eb; font-size:11px; text-align:center; }
+.nav-group-links { padding-bottom:4px; }
 
 /* ===== MAIN / ARTICLE ===== */
 .main { margin-left:max(var(--sidebar-w), calc((100vw - 1160px) / 2)); flex:1; position:relative; max-width:1160px; }
+.content-shell { display:grid; grid-template-columns:minmax(0, 820px) 260px; align-items:start; gap:28px; }
 .article { max-width:820px; padding:48px 48px 80px; }
+.page-aside { padding:48px 24px 80px 0; }
+.related-panel { position:sticky; top:28px; padding:4px 0; }
+.related-title { display:flex; justify-content:space-between; align-items:center; gap:10px; color:var(--text2); font-size:11px; font-weight:600; text-transform:uppercase; letter-spacing:.08em; padding-bottom:8px; border-bottom:1px solid var(--border); margin-bottom:6px; }
+.related-actions { display:inline-flex; gap:10px; font-family:var(--sans); }
+.related-actions button { border:none; background:none; color:var(--text2); padding:0; font-size:11px; cursor:pointer; opacity:.7; }
+.related-actions button:hover { color:var(--gold); opacity:1; }
+.related-total, .related-count { color:var(--text2); font-family:var(--sans); font-size:11px; font-weight:600; opacity:.65; }
+.related-section { padding-top:8px; margin-top:8px; }
+.related-section > summary { cursor:pointer; list-style:none; display:flex; align-items:center; gap:6px; color:var(--text2); font-size:11px; font-weight:600; letter-spacing:.04em; }
+.related-section > summary::-webkit-details-marker { display:none; }
+.related-section > summary::before { content:'▾'; color:var(--text2); font-size:9px; opacity:.6; transition:transform .16s ease; }
+.related-section:not([open]) > summary::before { transform:rotate(-90deg); }
+.related-section .related-count { margin-left:auto; }
+.related-items { display:flex; flex-direction:column; margin-top:4px; }
+.related-item { border:none; background:none; }
+.related-item > summary { cursor:pointer; list-style:none; display:flex; align-items:center; gap:8px; padding:5px 0 5px 14px; }
+.related-item > summary::-webkit-details-marker { display:none; }
+.related-item > summary::before { content:'▸'; color:var(--text2); opacity:.5; font-size:9px; transition:transform .16s ease; }
+.related-item[open] > summary::before { color:var(--gold); opacity:1; transform:rotate(90deg); }
+.related-item-title { color:var(--link); font-size:13px; font-weight:500; }
+.related-item:hover .related-item-title { color:var(--gold); }
+.related-mentions { margin-left:auto; font-size:11px; color:var(--text2); opacity:.55; }
+.related-item-body { padding:2px 0 8px 28px; }
+.related-excerpt { margin:6px 0 0; font-size:12px; line-height:1.6; color:var(--text2); }
+.related-hit { background:none; color:var(--text); border-bottom:1.5px solid var(--gold); padding:0; font-weight:600; }
+.related-more { margin:5px 0 0; font-size:11px; color:var(--text2); opacity:.55; }
+.related-original-link { display:inline-flex; margin-top:8px; color:var(--gold); text-decoration:none; font-size:12px; font-weight:500; opacity:.85; }
+.related-original-link:hover { text-decoration:underline; opacity:1; }
 .meta { font-size:13px; color:var(--text2); margin-bottom:16px; display:flex; align-items:center; gap:8px; }
 .type-badge { font-size:11px; padding:2px 9px; border-radius:4px; color:#fff; font-weight:600; letter-spacing:.5px; }
 .type-concept { background:#7C5E2A; }
 .type-entity  { background:#1A6B7C; }
-.type-summary { background:#2A6B4F; }
 .type-source  { background:#8B5E0B; }
 .type-index   { background:#6B6560; }
 .type-page    { background:var(--navy-light); }
@@ -585,7 +836,10 @@ body { font-family:var(--sans); color:var(--text); background:var(--bg); display
   body { display:block; }
   .sidebar { position:static; width:auto; bottom:auto; }
   .main { margin-left:0; max-width:100%; }
-  .article { padding:28px 22px 64px; }
+  .content-shell { display:block; }
+  .article { padding:28px 22px 36px; }
+  .page-aside { padding:0 22px 48px; }
+  .related-panel { position:static; }
   .article h1 { font-size:24px; }
 }
 """
@@ -611,7 +865,17 @@ async function initSearch(){
     });
   });
 }
+function initRelatedPanel(){
+  document.querySelectorAll('.related-panel').forEach(panel => {
+    const items = Array.from(panel.querySelectorAll('details'));
+    const expand = panel.querySelector('[data-related-expand]');
+    const collapse = panel.querySelector('[data-related-collapse]');
+    if(expand) expand.addEventListener('click', () => items.forEach(d => d.open = true));
+    if(collapse) collapse.addEventListener('click', () => items.forEach(d => d.open = false));
+  });
+}
 function initEnhancements(){
+  initRelatedPanel();
   if(window.mermaid) mermaid.initialize({ startOnLoad: true, theme: 'default' });
   if(window.renderMathInElement) renderMathInElement(document.body, { delimiters: [
     {left: '$$', right: '$$', display: true},

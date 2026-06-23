@@ -113,7 +113,7 @@ def cmd_init(args: argparse.Namespace) -> int:
     ensure_wiki_stub(paths, config)
     write_json(paths.artifacts / "manifest.json", {"project": config.project["project"], "status": "initialized"})
     print(f"Initialized Evo wiki project at {paths.root}")
-    print("Next: put source files under the runtime corpus/raw/ directory (default: workspace/corpus/raw/), let Claude Code compile wiki-src/{concepts,entities,summaries}, then run render-wiki for HTML.")
+    print("Next: put source files under the runtime corpus/raw/ directory (default: workspace/corpus/raw/), let Claude Code compile wiki-src/{concepts,entities,sources}, then run render-wiki for HTML.")
     return 0
 
 

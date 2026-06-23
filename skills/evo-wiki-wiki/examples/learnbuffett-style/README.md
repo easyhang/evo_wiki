@@ -16,13 +16,11 @@ skills/evo-wiki-wiki/examples/learnbuffett-style/
     index.md                          # 入口页
     concepts/                         # 概念页：护城河、内在价值
     entities/                         # 实体页：沃伦·巴菲特
-    summaries/                        # 摘要页：1986 致股东信摘要
     sources/                          # 原文页：摘要 + 原文全文
   site/                               # 已渲染 HTML 成品，可直接打开
     index.html
     concepts/*.html
     entities/*.html
-    summaries/*.html
     sources/*.html
     assets/style.css
     assets/app.js
@@ -33,9 +31,9 @@ skills/evo-wiki-wiki/examples/learnbuffett-style/
 
 ## 样例内容要求
 
-- **导航层级**：入口 → 概念 → 实体 → 摘要 → 原文，侧栏按同样层级分组展示。
-- **原文页**：`sources/*.md` 必须由「摘要」和「原文内容」组成，且必须保留完整原文。
-- **语料约束**：概念页、实体页、摘要页均严格基于 `corpus/raw/`，不使用模型常识补充未在语料中出现的事实。
+- **导航层级**：入口 → 概念 → 实体 → 原文，侧栏按同样层级分组展示，分组可折叠。
+- **原文页**：`sources/*.md` 必须由「摘要」和「原文内容」组成，且必须保留完整原文（摘要直接附在原文页内）；原文段落中为概念/实体加入 `[[wikilink]]`，右侧面板会按概念/实体分组展示这些链接，并可展开查看原文中的上下文摘录。
+- **语料约束**：概念页、实体页均严格基于 `corpus/raw/`，不使用模型常识补充未在语料中出现的事实。
 - **语言一致**：本样例语料、页面标题、正文、导航与说明均以中文为主。
 
 ## 设计系统（Design Tokens）
@@ -59,13 +57,13 @@ skills/evo-wiki-wiki/examples/learnbuffett-style/
 
 ## 关键版式规则
 
-- **布局**：左侧 260px 固定 navy 侧栏；正文 `.article` 居中、最大宽 820px、`padding:48px`。
-- **侧栏导航**：按 `入口 / 概念 / 实体 / 摘要 / 原文 / 其他` 分组；当前页用金色左边框 + 高亮底。
+- **布局**：左侧 260px 固定 navy 侧栏；正文 `.article` 居中、最大宽 820px、`padding:48px`；原文页可带右侧相关链接面板。
+- **侧栏导航**：按 `入口 / 概念 / 实体 / 摘要 / 原文 / 其他` 分组；每组可折叠，当前页用金色左边框 + 高亮底。
 - **标题**：全部用衬线字体、navy 色；`h1` 900 字重 30px；`h2` 21px 带 2px 底边线；`h3` navy-light。
 - **引用块**：奶油底、金色左边框、衬线斜体，营造「书摘」感。
 - **wikilink**：金色下划线高亮，失效链接 `.missing` 为灰色删除线。
 - **类型徽标**：概念、实体、摘要、原文使用不同颜色徽标。
-- **原文内容**：使用 fenced code block 保留 Markdown 原文，保证审计时能对照来源。
+- **原文内容**：用普通 Markdown 段落保留原文，并在原文中为概念/实体加入 `[[wikilink]]`，以便右侧面板自动聚合。
 
 ## 如何重新生成 HTML 样例
 

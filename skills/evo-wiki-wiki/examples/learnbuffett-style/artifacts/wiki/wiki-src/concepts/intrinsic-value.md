@@ -14,7 +14,7 @@ tags:
 
 一句话定义：在本样例语料中，内在价值指企业未来可分配现金流的折现值；它不是精确数字，而是需要估算的区间。
 
-## 语料社区摘要
+## 摘要
 
 两份语料都把内在价值与市场报价区分开：市场价格每天波动，但估值讨论应回到企业未来能够产生并分配给所有者的现金流。
 
@@ -30,7 +30,3 @@ tags:
 
 - 样例语料没有给出折现率、现金流预测期或安全边际的计算方法；本页不补写这些细节。
 
-## Sources
-
-- `examples/learnbuffett-style/corpus/raw/sample-notes.md`
-- `examples/learnbuffett-style/corpus/raw/1986-letter.md`

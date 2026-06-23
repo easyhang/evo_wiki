@@ -48,14 +48,14 @@ def test_wiki_lane_smoke(tmp_path: Path):
         "---\ntitle: Home\ntype: index\nsources:\n  - corpus/raw/intro.md\n---\n\n"
         "# Home\n\nEvo wiki supports **Wiki-first** workflows. See [[LightRAG]].\n\n"
         "```mermaid\ngraph LR\n  Corpus --> Wiki\n```\n\n"
-        "Inline math $x+y$.\n\n## Sources\n\n- `corpus/raw/intro.md`\n",
+        "Inline math $x+y$.\n",
         encoding="utf-8",
     )
     concept = project / "artifacts" / "wiki" / "wiki-src" / "concepts" / "lightrag.md"
     concept.parent.mkdir(parents=True, exist_ok=True)
     concept.write_text(
         "---\ntitle: LightRAG\ntype: concept\nsources:\n  - corpus/raw/intro.md\n---\n\n"
-        "# LightRAG\n\nLightRAG is the optional GraphRAG lane.\n\n## Sources\n\n- `corpus/raw/intro.md`\n",
+        "# LightRAG\n\nLightRAG is the optional GraphRAG lane.\n",
         encoding="utf-8",
     )
 

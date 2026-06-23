@@ -6,7 +6,7 @@
 
 ## 首版 MVP 能力
 
-- `wiki` lane：吸收 `llm-wiki-demo` 的可演进 Markdown Wiki 做法，由 Claude Code 维护 `index + concepts/entities/summaries/sources + audit/log`，再由 Python 渲染为最终静态 HTML 页面。
+- `wiki` lane：吸收 `llm-wiki-demo` 的可演进 Markdown Wiki 做法，由 Claude Code 维护 `index + concepts/entities/sources + audit/log`，再由 Python 渲染为最终静态 HTML 页面。
 - `lightrag` lane：从 `corpus/` 准备 LightRAG 输入，并通过 `lightrag-hku` 直接构建 workspace。
 - `artifacts` 协议：写入顶层 `manifest.json`、lane manifest、reports、state、agent plan/summary。
 - 增量基础：扫描 corpus hash，输出 added / modified / deleted change set。
@@ -83,7 +83,6 @@ workspace/artifacts/wiki/wiki-src/
   index.md
   concepts/
   entities/
-  summaries/
   sources/
 ```
 
@@ -92,12 +91,12 @@ workspace/artifacts/wiki/wiki-src/
 - `index.md` 是全局入口。
 - `concepts/` 放概念页，一个概念一个文件。
 - `entities/` 放人物、工具、论文、组织等实体页。
-- `summaries/` 放每个原始资料的摘要页。
-- `sources/` 放原文页，每页必须由「摘要」和「原文内容」组成，并保留完整原文。
-- 导航层级保持：入口 → 概念 → 实体 → 摘要 → 原文 → 其他。
+- `sources/` 放原文页，每页必须由「摘要」和「原文内容」组成，并保留完整原文；摘要直接附在原文页内，不再单独建摘要页；原文段落中要为已抽取概念/实体加入 `[[wikilink]]`。
+- 导航层级保持：入口 → 概念 → 实体 → 原文 → 其他；左侧导航按分组可折叠。
+- 原文页右侧会按概念/实体分组展示该页原文中链接到的词条，每个词条可展开查看原文中的上下文摘录，并提供跳转到该词条页面的「查看原文」。
 - 页面之间用 `[[wikilink]]` 交叉引用。
-- 每页用 `## Sources` 标注来源。
-- 概念页、实体页必须严格基于语料做 community summary，不使用模型常识编造。
+- 页面正文不需要单独展示 `## Sources`；如需追踪证据，可保留在 frontmatter、manifest、report 或 audit 中。
+- 概念页、实体页必须严格基于语料做自然摘要，不使用模型常识编造。
 - 主要语言必须与语料保持一致；中文语料项目中，页面、提示与说明以中文为主。
 
 2. 调用 Python 渲染：
@@ -166,9 +165,9 @@ skills/evo-wiki-wiki/examples/learnbuffett-style/
 
 该样例演示：
 
-- 导航层级：入口 → 概念 → 实体 → 摘要 → 原文。
-- 原文页：由「摘要」和「原文内容」组成，并保留完整原文。
-- 概念页 / 实体页：严格基于语料做 community summary，不编造语料外事实。
+- 导航层级：入口 → 概念 → 实体 → 摘要 → 原文；左侧分组可折叠。
+- 原文页：由「摘要」和「原文内容」组成，并保留完整原文；原文中要插入概念/实体 `[[wikilink]]`，渲染后右侧展示这些链接。
+- 概念页 / 实体页：严格基于语料做自然摘要，不编造语料外事实。
 - 主要语言保持中文一致。
 
 ## 命令
@@ -214,7 +213,6 @@ evo-wiki/
           index.md
           concepts/
           entities/
-          summaries/
           sources/
         audit/
           resolved/
@@ -222,6 +220,7 @@ evo-wiki/
         outputs/
           queries/
         dist/
+        progress.json
         reports/wiki-report.json
         reports/wiki-health.json
         state/wiki-dependency-graph.json
@@ -239,8 +238,10 @@ Claude Code：
 
 - 理解用户目标。
 - 判断本次是 Wiki-only、LightRAG-only，还是 Wiki-first。
-- 规划 Wiki 页面结构，包含概念页、实体页、摘要页与原文页。
-- 基于原始语料生成或更新 `workspace/artifacts/wiki/wiki-src/*.md`，其中概念页/实体页必须做基于语料的 community summary，原文页必须保留完整原文。
+- 规划 Wiki 页面结构，包含概念页、实体页与原文页（摘要直接附在原文页内）。
+- 基于原始语料生成或更新 `workspace/artifacts/wiki/wiki-src/*.md`，其中概念页/实体页必须做基于语料的自然摘要，原文页必须在同一页保留「摘要 + 原文内容」，并在原文中为已抽取概念/实体加入 `[[wikilink]]`。
+- Wiki 运行会持续写入 `workspace/artifacts/wiki/progress.json`，用于断点续处理。
+- Wiki 结束时必须读取 `wiki-health.json` / `wiki-report.json`，检查页面一致性、概念冲突、死链、孤儿页、原文页结构等。
 - 阅读 reports 并向用户解释风险。
 
 Python：
