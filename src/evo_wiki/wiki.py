@@ -237,6 +237,8 @@ def render_page(paths: ProjectPaths, config: EvoConfig, md_path: Path, link_map:
     frontmatter, markdown = split_frontmatter(raw)
     title = str(frontmatter.get("title") or extract_title(markdown) or md_path.stem.replace("-", " ").title())
     page_type = str(frontmatter.get("type") or infer_page_type(md_path, paths.wiki_src))
+    if page_type == "source":
+        markdown = polish_source_markdown(markdown)
     rel = md_path.relative_to(paths.wiki_src).with_suffix(".html")
     current = rel.as_posix()
     resolver = make_link_resolver(current=current, link_map=link_map)
@@ -323,6 +325,43 @@ def parse_sources(frontmatter: dict[str, object], markdown: str) -> list[str]:
         if in_sources and line.strip().startswith("- "):
             sources.append(line.strip()[2:].strip().strip("`"))
     return sorted(set(sources))
+
+
+def polish_source_markdown(markdown: str) -> str:
+    """Conservatively clean source-page formatting before rendering.
+
+    只处理显示层面的空白小毛病：尾随空格、全角空格、连续空格、过多空行，以及中文与
+    wikilink/标点之间的多余空格；不改写语义内容，也不回写 Markdown 源文件。
+    """
+    polished_lines: list[str] = []
+    in_code = False
+    blank_count = 0
+    for raw_line in markdown.splitlines():
+        line = raw_line.rstrip().replace("　", " ")
+        if line.strip().startswith("```"):
+            in_code = not in_code
+            polished_lines.append(line)
+            blank_count = 0
+            continue
+        if in_code:
+            polished_lines.append(line)
+            continue
+        line = re.sub(r"[ \t]{2,}", " ", line).strip()
+        line = re.sub(r"([\u4e00-\u9fff])\s+([\u4e00-\u9fff])", r"\1\2", line)
+        line = re.sub(r"([\u4e00-\u9fff])\s+(?=[，。！？；：、])", r"\1", line)
+        line = re.sub(r"([（《「『【])\s+", r"\1", line)
+        line = re.sub(r"\s+([）》」』】])", r"\1", line)
+        line = re.sub(r"([\u4e00-\u9fff])\s+(\[\[)", r"\1\2", line)
+        line = re.sub(r"(\]\])\s+([\u4e00-\u9fff])", r"\1\2", line)
+        line = re.sub(r"(\]\])\s+(?=[，。！？；：、])", r"\1", line)
+        if not line:
+            blank_count += 1
+            if blank_count <= 1:
+                polished_lines.append("")
+            continue
+        blank_count = 0
+        polished_lines.append(line)
+    return "\n".join(polished_lines).strip() + "\n"
 
 
 def markdown_to_html(markdown: str, *, resolver: Callable[[str], str]) -> str:
@@ -549,13 +588,13 @@ def source_related_panel(markdown: str, links: list[str], current: str, page_ind
                 f'<a class="related-original-link" href="{html.escape(href)}">查看原文 →</a>'
             )
             items.append(
-                f'<details class="related-item related-{group}" open>'
+                f'<details class="related-item related-{group}">'
                 f'<summary class="related-item-head"><span class="related-item-title">{html.escape(meta["title"])}</span>{count_label}</summary>'
                 f'<div class="related-item-body">{"".join(body_parts)}</div>'
                 "</details>"
             )
         sections.append(
-            f'<details class="related-section" open><summary>{labels[group]} <span class="related-count">{len(entries)}</span></summary>'
+            f'<details class="related-section"><summary>{labels[group]} <span class="related-count">{len(entries)}</span></summary>'
             f'<div class="related-items">{"".join(items)}</div></details>'
         )
 
@@ -594,7 +633,7 @@ def build_nav(paths: ProjectPaths, *, current: str) -> str:
             else:
                 count = len(grouped[group])
                 items.append(
-                    f'<details class="nav-group" open><summary class="nav-group-title"><span>{labels[group]}</span><span class="nav-count">{count}</span></summary>'
+                    f'<details class="nav-group"><summary class="nav-group-title"><span>{labels[group]}</span><span class="nav-count">{count}</span></summary>'
                     + '<div class="nav-group-links">'
                     + "".join(grouped[group])
                     + "</div></details>"
@@ -751,15 +790,16 @@ body { font-family:var(--sans); color:var(--text); background:var(--bg); display
 #search-results { margin-top:6px; }
 #search-results a { display:block; color:#cbd5e1; text-decoration:none; padding:7px 10px; border-radius:6px; font-size:12px; }
 #search-results a:hover { background:rgba(255,255,255,.06); color:#fff; }
-.sidebar-nav { flex:1; padding:8px 0 24px; overflow-y:auto; }
+.sidebar-nav { flex:1; padding:8px 0 24px; overflow-y:auto; text-align:left; }
 .sidebar-nav::-webkit-scrollbar { width:4px; }
 .sidebar-nav::-webkit-scrollbar-thumb { background:rgba(255,255,255,.15); border-radius:2px; }
-.nav-link { display:block; padding:6px 16px; color:#cbd5e1; text-decoration:none; font-size:13px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; border-left:3px solid transparent; transition:all .15s; }
+.nav-link { display:block; padding:6px 16px; color:#cbd5e1; text-decoration:none; text-align:left; font-size:13px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; border-left:3px solid transparent; transition:all .15s; }
 .nav-link:hover { background:rgba(255,255,255,.06); color:#fff; }
 .nav-link.active { color:#fff; background:rgba(184,134,11,.15); border-left-color:var(--gold); font-weight:600; }
 .nav-link.nav-home { font-size:14px; padding:10px 16px; font-weight:500; }
 .nav-group { margin-bottom:4px; }
-.nav-group-title { list-style:none; cursor:pointer; display:flex; align-items:center; justify-content:space-between; gap:8px; padding:10px 16px 6px; color:#cbd5e1; font-size:12px; font-weight:600; text-transform:uppercase; letter-spacing:.5px; }
+.nav-group-title { list-style:none; cursor:pointer; display:flex; align-items:center; justify-content:flex-start; gap:8px; padding:10px 16px 6px; color:#cbd5e1; text-align:left; font-size:12px; font-weight:600; text-transform:uppercase; letter-spacing:.5px; }
+.nav-group-title > span:first-of-type { margin-right:auto; }
 .nav-group-title::-webkit-details-marker { display:none; }
 .nav-group-title::before { content:'▾'; color:var(--gold-light); margin-right:6px; transition:transform .16s ease; }
 .nav-group:not([open]) .nav-group-title::before { transform:rotate(-90deg); }

@@ -26,15 +26,16 @@ body { font-family:var(--sans); color:var(--text); background:var(--bg); display
 #search-results { margin-top:6px; }
 #search-results a { display:block; color:#cbd5e1; text-decoration:none; padding:7px 10px; border-radius:6px; font-size:12px; }
 #search-results a:hover { background:rgba(255,255,255,.06); color:#fff; }
-.sidebar-nav { flex:1; padding:8px 0 24px; overflow-y:auto; }
+.sidebar-nav { flex:1; padding:8px 0 24px; overflow-y:auto; text-align:left; }
 .sidebar-nav::-webkit-scrollbar { width:4px; }
 .sidebar-nav::-webkit-scrollbar-thumb { background:rgba(255,255,255,.15); border-radius:2px; }
-.nav-link { display:block; padding:6px 16px; color:#cbd5e1; text-decoration:none; font-size:13px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; border-left:3px solid transparent; transition:all .15s; }
+.nav-link { display:block; padding:6px 16px; color:#cbd5e1; text-decoration:none; text-align:left; font-size:13px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; border-left:3px solid transparent; transition:all .15s; }
 .nav-link:hover { background:rgba(255,255,255,.06); color:#fff; }
 .nav-link.active { color:#fff; background:rgba(184,134,11,.15); border-left-color:var(--gold); font-weight:600; }
 .nav-link.nav-home { font-size:14px; padding:10px 16px; font-weight:500; }
 .nav-group { margin-bottom:4px; }
-.nav-group-title { list-style:none; cursor:pointer; display:flex; align-items:center; justify-content:space-between; gap:8px; padding:10px 16px 6px; color:#cbd5e1; font-size:12px; font-weight:600; text-transform:uppercase; letter-spacing:.5px; }
+.nav-group-title { list-style:none; cursor:pointer; display:flex; align-items:center; justify-content:flex-start; gap:8px; padding:10px 16px 6px; color:#cbd5e1; text-align:left; font-size:12px; font-weight:600; text-transform:uppercase; letter-spacing:.5px; }
+.nav-group-title > span:first-of-type { margin-right:auto; }
 .nav-group-title::-webkit-details-marker { display:none; }
 .nav-group-title::before { content:'▾'; color:var(--gold-light); margin-right:6px; transition:transform .16s ease; }
 .nav-group:not([open]) .nav-group-title::before { transform:rotate(-90deg); }

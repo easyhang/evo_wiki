@@ -19,4 +19,4 @@ PYTHONPATH=src python3 skills/evo-wiki-lightrag/scripts/dry-run-example.py
 - 扫描 `corpus/raw/lightrag-intro.md`。
 - 生成 `artifacts/lightrag/input/documents.jsonl`。
 - 生成 dry-run 的 `artifacts/lightrag/reports/lightrag-report.json`。
-- 不调用真实 LightRAG，不需要 LLM / embedding 环境。
+- 不调用真实 LightRAG 服务，不需要服务地址或鉴权环境变量。

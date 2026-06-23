@@ -29,7 +29,6 @@ examples/basic/artifacts/wiki/state/
 examples/basic/artifacts/lightrag/input/
 examples/basic/artifacts/lightrag/reports/
 examples/basic/artifacts/lightrag/state/
-examples/basic/artifacts/lightrag/workspace/
 examples/basic/artifacts/docker/
 examples/basic/artifacts/agent/
 examples/basic/artifacts/manifest.json

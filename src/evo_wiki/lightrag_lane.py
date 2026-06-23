@@ -1,13 +1,19 @@
 from __future__ import annotations
 
 import json
+import os
 import shutil
 from pathlib import Path
 from typing import Any
+from urllib.error import HTTPError, URLError
+from urllib.request import Request, urlopen
 
 from .corpus import CorpusFile, TEXT_SUFFIXES
 from .paths import ProjectPaths
 from .utils import read_json, relpath, utc_now, write_json
+
+
+DEFAULT_LIGHTRAG_SERVICE_URL = "http://127.0.0.1:9621"
 
 
 class LightRAGBuildError(RuntimeError):
@@ -57,7 +63,13 @@ def prepare_lightrag_input(paths: ProjectPaths, files: list[CorpusFile]) -> dict
     return manifest
 
 
-def build_lightrag(paths: ProjectPaths, *, smoke_query: str | None = None, dry_run: bool = False) -> dict:
+def build_lightrag(
+    paths: ProjectPaths,
+    *,
+    smoke_query: str | None = None,
+    dry_run: bool = False,
+    config: dict[str, Any] | None = None,
+) -> dict:
     input_manifest = read_json(paths.lightrag_input / "manifest.json", {})
     documents_path = paths.lightrag_input / "documents.jsonl"
     if not documents_path.exists():
@@ -69,6 +81,7 @@ def build_lightrag(paths: ProjectPaths, *, smoke_query: str | None = None, dry_r
     previous = ledger.get("documents", {})
     imported = []
     skipped = []
+    track_ids = []
     # H1：检测「曾经导入过、但当前 corpus 已不再包含」的文档。LightRAG 无法保证从
     # 已有图谱/向量中彻底删除旧知识，因此一旦发现删除，就必须诚实标记 requires_rebuild。
     current_ids = {doc["id"] for doc in docs}
@@ -88,25 +101,34 @@ def build_lightrag(paths: ProjectPaths, *, smoke_query: str | None = None, dry_r
         write_json(paths.lightrag_reports / "lightrag-report.json", report)
         return report
 
-    try:
-        from lightrag import LightRAG, QueryParam  # type: ignore
-    except Exception as exc:  # pragma: no cover - environment dependent
-        report = base_report("failed", input_manifest, imported, skipped, f"Cannot import LightRAG: {exc}", deleted=deleted)
-        write_json(paths.lightrag_reports / "lightrag-report.json", report)
-        raise LightRAGBuildError(report["error"]) from exc
+    service = resolve_lightrag_service_config(config)
+    client = LightRAGServiceClient(service["base_url"], headers=service["headers"], timeout=service["timeout_seconds"])
 
     try:
-        rag = LightRAG(working_dir=str(paths.lightrag_workspace))
         for doc in text_docs:
             if previous.get(doc["id"], {}).get("sha256") == doc["sha256"]:
                 skipped.append(doc["source_path"])
                 continue
-            rag.insert(doc["text"])
+            response = client.post_json(
+                "/documents/text",
+                {
+                    "text": doc["text"],
+                    "file_source": doc["source_path"],
+                },
+            )
             imported.append(doc["source_path"])
+            track_ids.append(
+                {
+                    "source_path": doc["source_path"],
+                    "status": response.get("status"),
+                    "track_id": response.get("track_id"),
+                }
+            )
             previous[doc["id"]] = {
                 "source_path": doc["source_path"],
                 "sha256": doc["sha256"],
-                "imported_at": utc_now(),
+                "submitted_at": utc_now(),
+                "service_track_id": response.get("track_id"),
             }
         # 把已从 corpus 删除的条目在 ledger 中标注出来（保留记录、但不再视为"已同步"）。
         for doc_id, meta in previous.items():
@@ -114,17 +136,30 @@ def build_lightrag(paths: ProjectPaths, *, smoke_query: str | None = None, dry_r
                 meta["removed_from_corpus"] = True
         smoke = None
         if smoke_query:
-            smoke = rag.query(smoke_query, param=QueryParam(mode="hybrid"))
-            write_json(paths.lightrag_queries / "smoke-test.json", {"query": smoke_query, "answer": smoke})
-    except Exception as exc:  # pragma: no cover - depends on LLM/env config
-        report = base_report("failed", input_manifest, imported, skipped, str(exc), deleted=deleted)
+            smoke = client.post_json(
+                "/query",
+                {
+                    "query": smoke_query,
+                    "mode": "hybrid",
+                    "include_references": True,
+                },
+            )
+            write_json(
+                paths.lightrag_queries / "smoke-test.json",
+                {"query": smoke_query, "answer": smoke.get("response"), "raw_response": smoke},
+            )
+    except Exception as exc:
+        report = base_report("failed", input_manifest, imported, skipped, str(exc), deleted=deleted, service=service["public"])
+        report["service_track_ids"] = track_ids
         write_json(paths.lightrag_reports / "lightrag-report.json", report)
         raise LightRAGBuildError(report["error"]) from exc
 
     ledger["documents"] = previous
     ledger["updated_at"] = utc_now()
+    ledger["service"] = service["public"]
     write_json(paths.lightrag_state / "lightrag-import-ledger.json", ledger)
-    report = base_report("success", input_manifest, imported, skipped, None, deleted=deleted)
+    report = base_report("success", input_manifest, imported, skipped, None, deleted=deleted, service=service["public"])
+    report["service_track_ids"] = track_ids
     report["smoke_test"] = {"query": smoke_query, "ran": bool(smoke_query)}
     write_json(paths.lightrag_reports / "lightrag-report.json", report)
     write_json(
@@ -132,16 +167,89 @@ def build_lightrag(paths: ProjectPaths, *, smoke_query: str | None = None, dry_r
         {
             "status": "success",
             "generated_at": report["generated_at"],
-            "workspace": relpath(paths.lightrag_workspace, paths.root),
+            "service": service["public"],
             "document_count": len(text_docs),
         },
     )
     return report
 
 
-def base_report(status: str, input_manifest: dict, imported: list[str], skipped: list[str], error: str | None, *, deleted: list[str] | None = None) -> dict:
-    deleted = deleted or []
+class LightRAGServiceClient:
+    def __init__(self, base_url: str, *, headers: dict[str, str] | None = None, timeout: float = 30.0):
+        self.base_url = base_url.rstrip("/")
+        self.headers = headers or {}
+        self.timeout = timeout
+
+    def post_json(self, path: str, payload: dict[str, Any]) -> dict[str, Any]:
+        return self.request_json("POST", path, payload)
+
+    def request_json(self, method: str, path: str, payload: dict[str, Any] | None = None) -> dict[str, Any]:
+        data = None if payload is None else json.dumps(payload, ensure_ascii=False).encode("utf-8")
+        headers = {"Accept": "application/json", **self.headers}
+        if data is not None:
+            headers["Content-Type"] = "application/json"
+        request = Request(f"{self.base_url}{path}", data=data, headers=headers, method=method)
+        try:
+            with urlopen(request, timeout=self.timeout) as response:  # noqa: S310 - user-configured service URL
+                body = response.read().decode("utf-8")
+        except HTTPError as exc:
+            detail = exc.read().decode("utf-8", errors="replace")
+            raise LightRAGBuildError(f"LightRAG service {method} {path} failed with HTTP {exc.code}: {detail}") from exc
+        except URLError as exc:
+            raise LightRAGBuildError(f"Cannot reach LightRAG service at {self.base_url}: {exc.reason}") from exc
+        if not body:
+            return {}
+        try:
+            return json.loads(body)
+        except json.JSONDecodeError as exc:
+            raise LightRAGBuildError(f"LightRAG service {method} {path} returned non-JSON response: {body[:200]}") from exc
+
+
+def resolve_lightrag_service_config(config: dict[str, Any] | None = None) -> dict[str, Any]:
+    cfg = config or {}
+    base_url = os.environ.get("LIGHTRAG_BASE_URL") or cfg.get("base_url") or DEFAULT_LIGHTRAG_SERVICE_URL
+    api_key_env = cfg.get("api_key_env", "LIGHTRAG_API_KEY")
+    bearer_token_env = cfg.get("bearer_token_env", "LIGHTRAG_BEARER_TOKEN")
+    api_key = os.environ.get(api_key_env) or cfg.get("api_key")
+    bearer_token = os.environ.get(bearer_token_env) or cfg.get("bearer_token")
+    timeout_seconds = float(cfg.get("timeout_seconds", 30))
+
+    headers = {}
+    if api_key:
+        headers["X-API-Key"] = api_key
+    if bearer_token:
+        headers["Authorization"] = f"Bearer {bearer_token}"
+
+    public = {
+        "mode": "service",
+        "base_url": base_url.rstrip("/"),
+        "api_key_env": api_key_env,
+        "bearer_token_env": bearer_token_env,
+        "auth": {
+            "api_key_configured": bool(api_key),
+            "bearer_token_configured": bool(bearer_token),
+        },
+    }
     return {
+        "base_url": public["base_url"],
+        "headers": headers,
+        "timeout_seconds": timeout_seconds,
+        "public": public,
+    }
+
+
+def base_report(
+    status: str,
+    input_manifest: dict,
+    imported: list[str],
+    skipped: list[str],
+    error: str | None,
+    *,
+    deleted: list[str] | None = None,
+    service: dict[str, Any] | None = None,
+) -> dict:
+    deleted = deleted or []
+    report = {
         "status": status,
         "generated_at": utc_now(),
         "input": input_manifest,
@@ -152,6 +260,9 @@ def base_report(status: str, input_manifest: dict, imported: list[str], skipped:
         "deleted_pending_rebuild": deleted,
         "error": error,
     }
+    if service is not None:
+        report["service"] = service
+    return report
 
 
 def read_text_for_lightrag(path: Path) -> str:

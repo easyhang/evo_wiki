@@ -28,9 +28,12 @@ DEFAULT_PROJECT = {
     "corpus_dir": "corpus",
     "artifacts_dir": "artifacts",
     "lightrag": {
-        "mode": "direct_dependency",
-        "working_dir": "artifacts/lightrag/workspace",
+        "mode": "service",
+        "base_url": "http://127.0.0.1:9621",
+        "api_key_env": "LIGHTRAG_API_KEY",
+        "bearer_token_env": "LIGHTRAG_BEARER_TOKEN",
         "input_file": "artifacts/lightrag/input/documents.jsonl",
+        "timeout_seconds": 30,
     },
 }
 

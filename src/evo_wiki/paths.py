@@ -72,7 +72,6 @@ class ProjectPaths:
             self.wiki_log,
             self.wiki_outputs / "queries",
             self.lightrag_input / "files",
-            self.lightrag_workspace,
             self.lightrag_reports,
             self.lightrag_state,
             self.lightrag_queries,

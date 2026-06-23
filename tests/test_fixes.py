@@ -2,6 +2,8 @@
 from __future__ import annotations
 
 import json
+import threading
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
 from evo_wiki.config import EvoConfig, deep_merge
@@ -78,6 +80,60 @@ def test_lightrag_dry_run_no_deletion_no_rebuild(tmp_path: Path):
     assert report["deleted_pending_rebuild"] == []
 
 
+def test_lightrag_build_submits_to_existing_service(tmp_path: Path):
+    requests: list[tuple[str, dict]] = []
+
+    class Handler(BaseHTTPRequestHandler):
+        def do_POST(self):  # noqa: N802 - stdlib handler API
+            length = int(self.headers.get("Content-Length", "0"))
+            payload = json.loads(self.rfile.read(length).decode("utf-8"))
+            requests.append((self.path, payload))
+            if self.path == "/documents/text":
+                body = {"status": "success", "message": "accepted", "track_id": "insert-1"}
+            elif self.path == "/query":
+                body = {"response": "smoke answer", "references": []}
+            else:
+                self.send_response(404)
+                self.end_headers()
+                return
+            data = json.dumps(body).encode("utf-8")
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(data)))
+            self.end_headers()
+            self.wfile.write(data)
+
+        def log_message(self, format, *args):  # noqa: A002 - stdlib handler API
+            return
+
+    server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        paths = ProjectPaths.from_root(tmp_path)
+        paths.ensure_base_dirs()
+        write_json(paths.lightrag_input / "manifest.json", {"status": "prepared", "document_count": 1})
+        doc = {"id": "doc-id", "source_path": "corpus/raw/doc.md", "sha256": "sha256:doc", "text": "hello service"}
+        (paths.lightrag_input / "documents.jsonl").write_text(json.dumps(doc) + "\n", encoding="utf-8")
+
+        base_url = f"http://127.0.0.1:{server.server_port}"
+        report = build_lightrag(paths, smoke_query="hello?", config={"base_url": base_url})
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=5)
+
+    assert report["status"] == "success"
+    assert report["service"]["base_url"] == base_url
+    assert report["service_track_ids"] == [{"source_path": "corpus/raw/doc.md", "status": "success", "track_id": "insert-1"}]
+    assert requests == [
+        ("/documents/text", {"text": "hello service", "file_source": "corpus/raw/doc.md"}),
+        ("/query", {"query": "hello?", "mode": "hybrid", "include_references": True}),
+    ]
+    smoke = json.loads((paths.lightrag_queries / "smoke-test.json").read_text(encoding="utf-8"))
+    assert smoke["answer"] == "smoke answer"
+
+
 # --- H2: per-lane corpus-state independence ---------------------------------
 
 def test_per_lane_corpus_state_is_independent(tmp_path: Path):
@@ -137,20 +193,20 @@ def test_parse_sources_handles_list_frontmatter():
 # --- M4: deep merge ---------------------------------------------------------
 
 def test_deep_merge_preserves_unspecified_nested_keys():
-    base = {"lightrag": {"mode": "direct", "working_dir": "ws", "input_file": "in"}}
-    override = {"lightrag": {"working_dir": "custom"}}
+    base = {"lightrag": {"mode": "service", "base_url": "http://127.0.0.1:9621", "input_file": "in"}}
+    override = {"lightrag": {"base_url": "http://localhost:9621"}}
     merged = deep_merge(base, override)
-    assert merged["lightrag"] == {"mode": "direct", "working_dir": "custom", "input_file": "in"}
+    assert merged["lightrag"] == {"mode": "service", "base_url": "http://localhost:9621", "input_file": "in"}
     # base must not be mutated
-    assert base["lightrag"]["working_dir"] == "ws"
+    assert base["lightrag"]["base_url"] == "http://127.0.0.1:9621"
 
 
 def test_config_load_deep_merges_user_overrides(tmp_path: Path):
-    write_json(tmp_path / "project.json", {"lightrag": {"working_dir": "custom/ws"}})
+    write_json(tmp_path / "project.json", {"lightrag": {"base_url": "http://localhost:9621"}})
     config = EvoConfig.load(tmp_path)
-    assert config.project["lightrag"]["working_dir"] == "custom/ws"
+    assert config.project["lightrag"]["base_url"] == "http://localhost:9621"
     # other default nested keys preserved
-    assert config.project["lightrag"]["mode"] == "direct_dependency"
+    assert config.project["lightrag"]["mode"] == "service"
     assert config.project["lightrag"]["input_file"] == "artifacts/lightrag/input/documents.jsonl"
 
 
@@ -198,7 +254,7 @@ def test_source_pages_render_with_source_type_and_nav_group(tmp_path: Path):
     source = paths.wiki_src / "sources" / "doc.md"
     source.write_text(
         "---\ntitle: 原文页\ntype: source\n---\n\n"
-        "# 原文页\n\n## 摘要\n\n基于原文。\n\n## 原文内容\n\n完整原文提到 [[护城河]] 与 [[沃伦·巴菲特]]。\n",
+        "# 原文页\n\n## 摘要\n\n基于原文。\n\n## 原文内容\n\n完整原文  提到 [[护城河]] 与 [[沃伦·巴菲特]] 。\n",
         encoding="utf-8",
     )
     report = render_wiki(paths, EvoConfig())
@@ -206,9 +262,10 @@ def test_source_pages_render_with_source_type_and_nav_group(tmp_path: Path):
 
     assert report["status"] == "success"
     assert '<span class="type-badge type-source">原文</span>' in html
-    assert '<details class="nav-group" open><summary class="nav-group-title"><span>原文</span>' in html
+    assert '<details class="nav-group"><summary class="nav-group-title"><span>原文</span>' in html
     assert 'href="../concepts/moat.html">护城河</a>' in html
     assert 'href="../entities/buffett.html">沃伦·巴菲特</a>' in html
+    assert '完整原文提到<a class="wikilink" href="../concepts/moat.html">护城河</a>与<a class="wikilink" href="../entities/buffett.html">沃伦·巴菲特</a>。' in html
     assert '<aside class="page-aside"><div class="related-panel">' in html
     assert "链接到本页" in html
     assert "## Sources" not in html

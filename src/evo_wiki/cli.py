@@ -53,10 +53,10 @@ def build_parser() -> argparse.ArgumentParser:
     p = sub.add_parser("prepare-lightrag", help="Prepare LightRAG input package from corpus")
     add_root(p); p.set_defaults(func=cmd_prepare_lightrag)
 
-    p = sub.add_parser("build-lightrag", help="Build LightRAG workspace through lightrag-hku")
+    p = sub.add_parser("build-lightrag", help="Submit prepared LightRAG input to an existing LightRAG service")
     add_root(p)
-    p.add_argument("--smoke-query", default=None, help="Optional hybrid query after import")
-    p.add_argument("--dry-run", action="store_true", help="Do not call LightRAG; only report import delta")
+    p.add_argument("--smoke-query", default=None, help="Optional hybrid query after import submission")
+    p.add_argument("--dry-run", action="store_true", help="Do not call LightRAG service; only report import delta")
     p.set_defaults(func=cmd_build_lightrag)
 
     p = sub.add_parser("export-docker", help="Export Dockerfiles and docker-compose")
@@ -156,9 +156,9 @@ def cmd_prepare_lightrag(args: argparse.Namespace) -> int:
 
 
 def cmd_build_lightrag(args: argparse.Namespace) -> int:
-    paths, _ = load(args.root)
+    paths, config = load(args.root)
     paths.ensure_base_dirs()
-    report = build_lightrag(paths, smoke_query=args.smoke_query, dry_run=args.dry_run)
+    report = build_lightrag(paths, smoke_query=args.smoke_query, dry_run=args.dry_run, config=config.project.get("lightrag", {}))
     print(json.dumps(report, ensure_ascii=False, indent=2))
     return 0
 
@@ -207,12 +207,12 @@ def cmd_run(args: argparse.Namespace) -> int:
     if "lightrag" in lanes:
         input_report = prepare_lightrag_input(paths, files)
         try:
-            lr_report = build_lightrag(paths, smoke_query=args.smoke_query, dry_run=args.lightrag_dry_run)
-            lightrag_status = {"status": lr_report["status"], "workspace": "artifacts/lightrag/workspace", "document_count": input_report["document_count"]}
+            lr_report = build_lightrag(paths, smoke_query=args.smoke_query, dry_run=args.lightrag_dry_run, config=config.project.get("lightrag", {}))
+            lightrag_status = {"status": lr_report["status"], "service": lr_report.get("service"), "document_count": input_report["document_count"]}
             summary.append(f"LightRAG lane: {lr_report['status']} ({input_report['document_count']} docs)")
             persist_corpus_state(files, lane_state_path(paths, "lightrag"))
         except LightRAGBuildError as exc:
-            lightrag_status = {"status": "failed", "workspace": "artifacts/lightrag/workspace", "error": str(exc), "document_count": input_report["document_count"]}
+            lightrag_status = {"status": "failed", "service": config.project.get("lightrag", {}).get("base_url"), "error": str(exc), "document_count": input_report["document_count"]}
             summary.append(f"LightRAG lane: failed ({exc})")
     # 全局 corpus-state 仅作为 scan/inspect 的并集预览。
     persist_corpus_state(files, paths.artifacts / "corpus-state.json")

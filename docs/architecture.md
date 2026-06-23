@@ -37,5 +37,5 @@ Users can override this boundary with `--root /path/to/project-workspace` when C
 - `evo_wiki.corpus`: corpus scan, hash, change set.
 - `evo_wiki.artifacts`: manifest, delta plan, run summary.
 - `evo_wiki.wiki`: markdown-to-static-site renderer and search index.
-- `evo_wiki.lightrag_lane`: LightRAG input package and direct `lightrag-hku` invocation.
-- `evo_wiki.docker_export`: Dockerfile and compose export.
+- `evo_wiki.lightrag_lane`: LightRAG input package and HTTP submission to an existing LightRAG Server.
+- `evo_wiki.docker_export`: Wiki Dockerfile/compose export plus external LightRAG service configuration example.

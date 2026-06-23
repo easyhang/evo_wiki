@@ -7,10 +7,10 @@
 ## 首版 MVP 能力
 
 - `wiki` lane：吸收 `llm-wiki-demo` 的可演进 Markdown Wiki 做法，由 Claude Code 维护 `index + concepts/entities/sources + audit/log`，再由 Python 渲染为最终静态 HTML 页面。
-- `lightrag` lane：从 `corpus/` 准备 LightRAG 输入，并通过 `lightrag-hku` 直接构建 workspace。
+- `lightrag` lane：从 `corpus/` 准备 LightRAG 输入，并提交到一个已有的 LightRAG Server 服务。
 - `artifacts` 协议：写入顶层 `manifest.json`、lane manifest、reports、state、agent plan/summary。
 - 增量基础：扫描 corpus hash，输出 added / modified / deleted change set。
-- Docker 导出：按已存在产物导出 Wiki / LightRAG Dockerfile 与 compose。
+- Docker 导出：按已存在产物导出 Wiki Dockerfile / compose，并提供外部 LightRAG 服务配置样例。
 - 完全分离：Wiki 与 LightRAG 可以独立运行、独立更新、独立部署。
 
 ## Skill 拆分
@@ -21,7 +21,7 @@ Evo Wiki 现在采用主 Skill + 两个 lane 子 Skill 的结构：
 |---|---|---|
 | 主 Skill | 只做目标判断、lane 路由与边界说明 | `SKILL.md` |
 | Wiki 子 Skill | Wiki 写作、页面结构、HTML 样例、渲染脚本 | `skills/evo-wiki-wiki/` |
-| LightRAG 子 Skill | LightRAG 输入准备、dry-run、构建与删除重建安全协议 | `skills/evo-wiki-lightrag/` |
+| LightRAG 子 Skill | LightRAG 输入准备、dry-run、提交到已有服务与删除重建安全协议 | `skills/evo-wiki-lightrag/` |
 
 两个子 Skill 都有独立的 `SKILL.md`、`scripts/` 与 `examples/`。
 
@@ -34,7 +34,7 @@ python3 -m venv .venv
 pip install -e .
 ```
 
-> `pyproject.toml` 直接依赖 `lightrag-hku`。真实构建 LightRAG 时，还需要按 LightRAG 的要求配置 LLM / embedding 环境变量。
+> Evo Wiki 不再在本进程内安装或启动 `lightrag-hku`。真实写入 LightRAG 时，需要先准备一个已运行的 LightRAG Server；默认地址是 `http://127.0.0.1:9621`，可通过 `project.json` 的 `lightrag.base_url` 或环境变量 `LIGHTRAG_BASE_URL` 覆盖。若服务启用了 API key 或登录鉴权，分别设置 `LIGHTRAG_API_KEY` 或 `LIGHTRAG_BEARER_TOKEN`。
 
 ## 运行数据目录
 
@@ -115,7 +115,19 @@ workspace/artifacts/wiki/reports/wiki-health.json
 workspace/artifacts/wiki/state/wiki-dependency-graph.json
 ```
 
-### 只生成 LightRAG
+### 只更新 LightRAG 服务
+
+先确认已有 LightRAG Server 正在运行：
+
+```bash
+export LIGHTRAG_BASE_URL=http://127.0.0.1:9621
+# 如服务启用了 API key：
+# export LIGHTRAG_API_KEY=...
+# 如服务使用登录后获得的 Bearer token：
+# export LIGHTRAG_BEARER_TOKEN=...
+```
+
+然后提交当前语料：
 
 ```bash
 evo-wiki run --lane lightrag
@@ -125,12 +137,12 @@ evo-wiki run --lane lightrag
 
 ```text
 workspace/artifacts/lightrag/input/documents.jsonl
-workspace/artifacts/lightrag/workspace/
 workspace/artifacts/lightrag/reports/lightrag-report.json
 workspace/artifacts/lightrag/state/lightrag-import-ledger.json
+workspace/artifacts/lightrag/queries/smoke-test.json   # 仅传入 --smoke-query 时
 ```
 
-如果当前环境未配置 LightRAG 所需 LLM / embedding，命令会失败并写入失败报告。可以先 dry-run：
+如果只是检查哪些文档会提交到服务，可以先 dry-run：
 
 ```bash
 evo-wiki run --lane lightrag --lightrag-dry-run
@@ -179,9 +191,9 @@ skills/evo-wiki-wiki/examples/learnbuffett-style/
 | `evo-wiki render-wiki` | 渲染 Markdown Wiki 为静态 HTML |
 | `evo-wiki lint-wiki` | 对 wiki-src/audit/log 做健康检查，输出 `wiki-health.json` |
 | `evo-wiki prepare-lightrag` | 生成 LightRAG 输入包 |
-| `evo-wiki build-lightrag` | 调用 `lightrag-hku` 构建 workspace |
+| `evo-wiki build-lightrag` | 调用已有 LightRAG Server API 提交输入文档 |
 | `evo-wiki run --lane wiki|lightrag|both` | 编排运行一个或两个 lane |
-| `evo-wiki export-docker` | 导出 Docker 交付物 |
+| `evo-wiki export-docker` | 导出 Wiki Docker 交付物与外部 LightRAG 服务配置样例 |
 | `evo-wiki inspect` | 查看 manifest 和报告 |
 
 ## 项目结构
@@ -226,9 +238,9 @@ evo-wiki/
         state/wiki-dependency-graph.json
       lightrag/
         input/documents.jsonl
-        workspace/
         reports/lightrag-report.json
         state/lightrag-import-ledger.json
+        queries/
       docker/
 ```
 
@@ -250,12 +262,12 @@ Python：
 - 扫描 corpus 和 change set。
 - 渲染 Markdown 为 HTML。
 - 生成搜索索引和报告。
-- 准备并调用 LightRAG。
+- 准备 LightRAG 输入并调用已有 LightRAG Server API。
 - 导出 Docker 交付物。
 
 ## 设计边界
 
 - Wiki 不默认作为 LightRAG 入库源。
-- LightRAG 默认从 `workspace/corpus/` / normalized input 建库。
-- Wiki 与 LightRAG 不共享索引、不共享状态、不要求一起构建。
+- LightRAG 默认从 `workspace/corpus/` / normalized input 提交到已有 LightRAG 服务。
+- Wiki 与 LightRAG 不共享索引、不共享状态、不要求一起运行或一起部署。
 - Python 首版不负责 LLM 写作，内容生成由 Claude Code 完成。
