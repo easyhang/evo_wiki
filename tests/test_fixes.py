@@ -297,7 +297,7 @@ def test_render_wiki_writes_progress_and_lint_metadata(tmp_path: Path):
     assert manifest["lint_report"] == "artifacts/wiki/reports/wiki-health.json"
 
 
-def test_lint_detects_concept_conflict_and_bad_source_page(tmp_path: Path):
+def test_lint_is_demo_style_plus_html_source_structure(tmp_path: Path):
     paths = ProjectPaths.from_root(tmp_path)
     paths.ensure_base_dirs()
     (paths.wiki_src / "index.md").write_text("# 首页\n\n- [[重复概念]]\n", encoding="utf-8")
@@ -317,7 +317,7 @@ def test_lint_detects_concept_conflict_and_bad_source_page(tmp_path: Path):
     health = lint_wiki_artifacts(paths.root, paths.wiki_src, paths.wiki_audit, paths.wiki_log)
     codes = {issue["code"] for issue in health["issues"]}
 
-    assert "concept_conflict" in codes
-    assert "duplicate_page_title" in codes
+    assert "concept_conflict" not in codes
+    assert "duplicate_page_title" not in codes
     assert "source_missing_summary" in codes
     assert "source_missing_original" in codes

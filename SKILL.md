@@ -43,13 +43,15 @@ Wiki lane 与 LightRAG lane 必须完全分离：
 
 负责：
 
-- 从 `workspace/corpus/` 原始语料生成可读静态 Wiki。
-- 维护 `index / concepts / entities / sources` 页面结构。
+- 按 `llm-wiki-demo` 式 Skill 操作维护 Wiki：`ingest / compile / query / lint / audit`。
+- 从 `workspace/corpus/` 原始语料生成可读静态 Wiki 源文件。
+- 维护 `index / concepts / entities / sources` 页面结构，以及 `audit / log / outputs/queries`。
 - 概念页与实体页必须基于语料做自然摘要，不编造；页面正文不需要单独标明来源。
 - 原文页必须由「摘要」与「原文内容」组成，并保留完整原文。
 - 生成 learnbuffett 风格的典雅书卷气 HTML 样例。
-- 写入 `artifacts/wiki/progress.json`，用于断点续处理。
-- 结束时运行 lint，检查页面一致性、概念冲突、死链、孤儿页与原文页结构。
+- 写入 `artifacts/wiki/progress.json`，用于渲染断点续处理。
+- 任何修改 `wiki-src/` Markdown 页面的 Wiki 操作结束前，必须运行 `evo-wiki render-wiki` 或 `evo-wiki run --lane wiki`，生成最终 HTML。
+- 结束时运行轻量 lint：死链、孤儿页、index 收录、潜在未链接概念、audit/log 形状、audit target，以及 HTML 必需的原文页结构。
 - 运行 `evo-wiki run --lane wiki`、`render-wiki`、`lint-wiki`。
 
 自带内容：

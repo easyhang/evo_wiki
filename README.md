@@ -76,7 +76,24 @@ cp /path/to/source.md workspace/corpus/raw/
 
 ### 只生成 Wiki
 
-1. 让 Claude Code 基于 `workspace/corpus/` 生成或更新 Markdown Wiki 源文件：
+Wiki lane 采用 `llm-wiki-demo` 式 Skill 化工作法：**Claude Code 通过自然语言操作 Markdown Wiki 源文件，Python CLI 只负责渲染、轻量 lint、报告和静态 HTML 交付**。
+
+1. 把资料放入：
+
+```text
+workspace/corpus/raw/
+```
+
+2. 让 Claude Code 执行 Skill 操作，例如：
+
+```text
+ingest workspace/corpus/raw/source.md
+compile workspace/artifacts/wiki/wiki-src/concepts/
+这个 wiki 里怎么解释 X？
+处理所有 open audit
+```
+
+Claude Code 维护：
 
 ```text
 workspace/artifacts/wiki/wiki-src/
@@ -84,6 +101,9 @@ workspace/artifacts/wiki/wiki-src/
   concepts/
   entities/
   sources/
+workspace/artifacts/wiki/audit/
+workspace/artifacts/wiki/log/
+workspace/artifacts/wiki/outputs/queries/
 ```
 
 其中：
@@ -92,17 +112,18 @@ workspace/artifacts/wiki/wiki-src/
 - `concepts/` 放概念页，一个概念一个文件。
 - `entities/` 放人物、工具、论文、组织等实体页。
 - `sources/` 放原文页，每页必须由「摘要」和「原文内容」组成，并保留完整原文；摘要直接附在原文页内，不再单独建摘要页；原文段落中要为已抽取概念/实体加入 `[[wikilink]]`。
-- 导航层级保持：入口 → 概念 → 实体 → 原文 → 其他；左侧导航按分组可折叠。
-- 原文页右侧会按概念/实体分组展示该页原文中链接到的词条，每个词条可展开查看原文中的上下文摘录，并提供跳转到该词条页面的「查看原文」。
+- `audit/` 是反馈队列；明确修复的问题归档到 `audit/resolved/`。
+- `log/` 记录每次 `ingest / compile / query / lint / audit` 操作。
+- `outputs/queries/` 可保存有复用价值的 Wiki 问答。
 - 页面之间用 `[[wikilink]]` 交叉引用。
-- 页面正文不需要单独展示 `## Sources`；如需追踪证据，可保留在 frontmatter、manifest、report 或 audit 中。
 - 概念页、实体页必须严格基于语料做自然摘要，不使用模型常识编造。
 - 主要语言必须与语料保持一致；中文语料项目中，页面、提示与说明以中文为主。
 
-2. 调用 Python 渲染：
+3. 需要 HTML 预览或交付时调用 Python 渲染：
 
 ```bash
 evo-wiki run --lane wiki
+# 或只渲染：evo-wiki render-wiki
 ```
 
 输出：
@@ -177,7 +198,7 @@ skills/evo-wiki-wiki/examples/learnbuffett-style/
 
 该样例演示：
 
-- 导航层级：入口 → 概念 → 实体 → 摘要 → 原文；左侧分组可折叠。
+- 导航层级：入口 → 概念 → 实体 → 原文；左侧分组可折叠。
 - 原文页：由「摘要」和「原文内容」组成，并保留完整原文；原文中要插入概念/实体 `[[wikilink]]`，渲染后右侧展示这些链接。
 - 概念页 / 实体页：严格基于语料做自然摘要，不编造语料外事实。
 - 主要语言保持中文一致。
@@ -248,20 +269,19 @@ evo-wiki/
 
 Claude Code：
 
-- 理解用户目标。
-- 判断本次是 Wiki-only、LightRAG-only，还是 Wiki-first。
-- 规划 Wiki 页面结构，包含概念页、实体页与原文页（摘要直接附在原文页内）。
+- 理解用户目标，判断本次是 Wiki-only、LightRAG-only，还是 Wiki-first。
+- 按 `llm-wiki-demo` 式 Skill 操作维护 Wiki：`ingest / compile / query / lint / audit`。
 - 基于原始语料生成或更新 `workspace/artifacts/wiki/wiki-src/*.md`，其中概念页/实体页必须做基于语料的自然摘要，原文页必须在同一页保留「摘要 + 原文内容」，并在原文中为已抽取概念/实体加入 `[[wikilink]]`。
-- Wiki 运行会持续写入 `workspace/artifacts/wiki/progress.json`，用于断点续处理。
-- Wiki 结束时必须读取 `wiki-health.json` / `wiki-report.json`，检查页面一致性、概念冲突、死链、孤儿页、原文页结构等。
-- 阅读 reports 并向用户解释风险。
+- 维护 `index.md`、`audit/`、`log/`、`outputs/queries/`；发现不确定事实时写 audit，不用模型常识补齐。
+- 读取 `wiki-health.json` / `wiki-report.json`，只向用户解释基础健康问题、HTML 生成状态和下一步建议。
 
 Python：
 
 - 维护目录结构。
 - 扫描 corpus 和 change set。
-- 渲染 Markdown 为 HTML。
-- 生成搜索索引和报告。
+- 渲染 Markdown 为静态 HTML。
+- 生成搜索索引、依赖图、进度文件和报告。
+- 执行轻量健康检查：demo 风格链接/索引/audit/log 检查 + HTML 必需的原文页结构检查。
 - 准备 LightRAG 输入并调用已有 LightRAG Server API。
 - 导出 Docker 交付物。
 

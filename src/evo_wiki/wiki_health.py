@@ -42,20 +42,20 @@ class HealthIssue:
 
 
 def lint_wiki_artifacts(root: Path, wiki_src: Path, audit_dir: Path, log_dir: Path) -> dict:
-    """Run llm-wiki-demo-inspired health checks against Evo wiki's HTML-bound wiki-src."""
+    """Run llm-wiki-demo-style checks, plus HTML-required source page structure."""
     stem_map = stem_to_path_map(wiki_src)
     issues: list[HealthIssue] = []
+    # llm-wiki-demo style passes: link graph, index coverage, concept hints,
+    # log shape, audit shape, and audit target validity.
     issues.extend(pass_dead_wikilinks(root, wiki_src, stem_map))
     issues.extend(pass_orphan_pages(root, wiki_src, stem_map))
     issues.extend(pass_missing_index_entries(root, wiki_src, stem_map))
     issues.extend(pass_unlinked_concepts(root, wiki_src, stem_map))
-    issues.extend(pass_page_type_consistency(root, wiki_src))
-    issues.extend(pass_duplicate_page_titles(root, wiki_src))
-    issues.extend(pass_concept_conflicts(root, wiki_src))
-    issues.extend(pass_source_page_structure(root, wiki_src))
+    issues.extend(pass_log_shape(root, log_dir))
     issues.extend(pass_audit_shape(root, audit_dir))
     issues.extend(pass_audit_targets(root, audit_dir))
-    issues.extend(pass_log_shape(root, log_dir))
+    # Evo Wiki HTML source pages need these headings for the summary/original UX.
+    issues.extend(pass_source_page_structure(root, wiki_src))
     by_severity = Counter(issue.severity for issue in issues)
     return {
         "status": "clean" if not issues else "issues_found",
@@ -152,17 +152,6 @@ def expected_page_type(path: Path, wiki_src: Path) -> str:
     return "page"
 
 
-def page_title(path: Path) -> str:
-    text = read_text_safe(path)
-    fields = parse_yaml_frontmatter(text) or {}
-    title = fields.get("title")
-    if isinstance(title, str) and title.strip():
-        return title.strip()
-    for line in markdown_body(text).splitlines():
-        if line.startswith("# "):
-            return line[2:].strip()
-    return path.stem
-
 def pass_dead_wikilinks(root: Path, wiki_src: Path, stem_map: dict[str, Path]) -> list[HealthIssue]:
     issues: list[HealthIssue] = []
     for md in collect_md_files(wiki_src):
@@ -222,66 +211,6 @@ def pass_unlinked_concepts(root: Path, wiki_src: Path, stem_map: dict[str, Path]
             continue
         if slugify(term) not in stem_map and term.lower() not in linked and slugify(term) not in linked:
             issues.append(HealthIssue("info", "unlinked_concept", f'Potential concept "{term}" appears {count} times without a page'))
-    return issues
-
-
-def pass_page_type_consistency(root: Path, wiki_src: Path) -> list[HealthIssue]:
-    issues: list[HealthIssue] = []
-    for md in collect_md_files(wiki_src):
-        fields = parse_yaml_frontmatter(read_text_safe(md)) or {}
-        declared = fields.get("type")
-        expected = expected_page_type(md, wiki_src)
-        if isinstance(declared, str) and declared and declared != expected:
-            issues.append(
-                HealthIssue(
-                    "warn",
-                    "page_type_mismatch",
-                    f"Frontmatter type '{declared}' does not match path-implied type '{expected}'",
-                    relpath(md, root),
-                )
-            )
-    return issues
-
-
-def pass_duplicate_page_titles(root: Path, wiki_src: Path) -> list[HealthIssue]:
-    by_slug: dict[str, list[Path]] = {}
-    for md in collect_md_files(wiki_src):
-        by_slug.setdefault(slugify(page_title(md)), []).append(md)
-    issues: list[HealthIssue] = []
-    for title_slug, paths in sorted(by_slug.items()):
-        if len(paths) <= 1:
-            continue
-        issues.append(
-            HealthIssue(
-                "warn",
-                "duplicate_page_title",
-                f"Duplicate or conflicting page title slug '{title_slug}' appears in multiple pages",
-                ", ".join(relpath(path, root) for path in paths),
-            )
-        )
-    return issues
-
-
-def pass_concept_conflicts(root: Path, wiki_src: Path) -> list[HealthIssue]:
-    concept_like = [md for md in collect_md_files(wiki_src) if expected_page_type(md, wiki_src) in {"concept", "entity"}]
-    by_alias: dict[str, list[Path]] = {}
-    for md in concept_like:
-        aliases = {md.stem.lower(), slugify(md.stem), page_title(md).lower(), slugify(page_title(md))}
-        for alias in aliases:
-            by_alias.setdefault(alias, []).append(md)
-    issues: list[HealthIssue] = []
-    for alias, paths in sorted(by_alias.items()):
-        unique_paths = sorted(set(paths))
-        if len(unique_paths) <= 1:
-            continue
-        issues.append(
-            HealthIssue(
-                "warn",
-                "concept_conflict",
-                f"Concept/entity alias '{alias}' resolves to multiple pages; merge, rename, or disambiguate",
-                ", ".join(relpath(path, root) for path in unique_paths),
-            )
-        )
     return issues
 
 

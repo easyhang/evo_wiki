@@ -182,59 +182,114 @@ sources:
 
 ````
 
-## 7. 操作流程
+## 7. 操作流程：llm-wiki-demo 式 Skill 化五操作
 
-### ingest：摄入资料
+Wiki lane 采用 `llm-wiki-demo` 的 Skill 化工作法：**用户用自然语言触发操作，Agent 直接维护 Markdown Wiki 源文件，Python 只负责渲染、简单 lint、报告和静态 HTML 交付**。
 
-1. 阅读 `workspace/corpus/raw/*` 原文。
-2. 创建/更新 `sources/` 原文页（同一页包含摘要 + 完整原文；原文段落中加入概念/实体 `[[wikilink]]`）。
-3. 抽取概念并创建/更新 `concepts/` 页面。
-4. 抽取实体并创建/更新 `entities/` 页面。
-5. 添加 `[[wikilink]]`，尤其要在原文内容中链接已抽取的概念/实体；更新 `index.md`。
-6. 运行：
+每次 `ingest / compile / query / lint / audit` 都应在 `workspace/artifacts/wiki/log/YYYYMMDD.md` 中记一笔，格式保持简洁：时间、操作、输入、触达页面、结果摘要。发现不确定事实或结构问题时，优先通过 `audit/` 记录，而不是扩写无证据内容。
 
-```bash
-evo-wiki run --lane wiki
-```
+**最终渲染要求：** 任何会新增、修改或删除 `wiki-src/` Markdown 页面的操作（尤其是 `ingest / compile / audit`）结束前，必须运行 `evo-wiki render-wiki` 或 `evo-wiki run --lane wiki`，将 Markdown 源渲染成最终静态 HTML，并确认 `workspace/artifacts/wiki/dist/index.html` 与报告已生成。
 
-8. 读取并解释：
+### 7.1 ingest：摄入资料
+
+触发方式示例：
 
 ```text
-workspace/artifacts/wiki/reports/wiki-report.json
-workspace/artifacts/wiki/reports/wiki-health.json
-workspace/artifacts/manifest.json
+ingest workspace/corpus/raw/xxx.md
+把 corpus/raw 里的新资料编译进 wiki
 ```
 
-### compile：重组 Wiki
+Agent 执行：
 
-当页面过长、重复、链接差或结构混乱时：
+1. 阅读指定 `workspace/corpus/raw/*` 原文；不要改写原始语料。
+2. 创建/更新 `wiki-src/sources/` 原文页：同一页包含「摘要 + 原文内容」，保留完整原文，并在原文段落中为已抽取概念/实体加入 `[[wikilink]]`。
+3. 创建/更新 `wiki-src/concepts/` 概念页：一概念一页，只写语料支撑的内容。
+4. 创建/更新 `wiki-src/entities/` 实体页：人物、工具、论文、组织等实体只覆盖语料涉及范围。
+5. 更新 `wiki-src/index.md`，确保本次新增/修改页面可从入口页发现。
+6. 写入 `log/YYYYMMDD.md`；如发现证据不足或矛盾，写入 `audit/`。
+7. 最后必须渲染 Markdown 为静态 HTML：
 
-1. 扫描 `wiki-src/`。
-2. 拆分超长页面、合并重复页面。
-3. 重建交叉链接与 `index.md`。
-4. 运行：
+```bash
+evo-wiki render-wiki
+# 或完整 lane：evo-wiki run --lane wiki
+```
+
+### 7.2 compile：重组 Wiki
+
+触发方式示例：
+
+```text
+compile wiki-src/concepts/
+重组这些页面，让结构更清楚
+```
+
+Agent 执行：
+
+1. 读取 `wiki-src/` 当前结构，识别过长页面、重复页面、孤立页面、链接不足页面。
+2. 拆分超长页面，合并明显重复内容；保留用户手工编辑区。
+3. 重建 `[[wikilink]]`，让概念、实体、原文页互相可达。
+4. 更新 `index.md` 与相关页面的「相关页面 / 未决问题」。
+5. 对不确定的合并、冲突或事实问题创建 audit，而不是自行定论。
+6. 写入 log；最后必须运行 `evo-wiki render-wiki`，将 Markdown 重组结果渲染成 HTML。
+
+### 7.3 query：基于 Wiki 回答
+
+触发方式示例：
+
+```text
+这个 wiki 里怎么解释 X？
+```
+
+Agent 执行：
+
+1. 只搜索 `workspace/artifacts/wiki/wiki-src/` 中已有页面。
+2. 严格基于 Wiki 内容回答；Wiki 没覆盖就明确说明，不用模型常识补齐。
+3. 用 `[[wikilink]]` 或文件路径指出依据页面。
+4. 有复用价值的问答可保存到 `workspace/artifacts/wiki/outputs/queries/<slug>.md`。
+5. 回答时发现缺口、矛盾或过期信息，创建 self-audit。
+6. 写入 log。
+
+### 7.4 lint：健康检查
+
+触发方式示例：
 
 ```bash
 evo-wiki lint-wiki
-evo-wiki render-wiki
 ```
 
-### audit：处理反馈
+lint 保持 `llm-wiki-demo` 的轻量模型，只检查维护 Wiki 所需的基础健康项；除 HTML 渲染必需项外，不做语义级或审美级判断。
 
-用户指出事实错误或来源缺失时：
+必须覆盖：
 
-- 明确可修复：修改页面并在 `audit/resolved/` 写 resolved audit。
-- 不确定：在 `audit/` 写 open audit，等待进一步证据。
+1. 死链：`[[wikilink]]` 指向不存在页面。
+2. 孤儿页：页面没有入链。
+3. `index.md` 收录：页面是否能从入口发现。
+4. 潜在未链接概念：高频候选词但没有页面或链接。
+5. log 形状：`log/YYYYMMDD.md` 与日期标题。
+6. audit 形状：必填字段、severity/status/source 枚举。
+7. audit target：open audit 指向的目标文件是否存在。
+8. HTML 必需项：`sources/*.md` 是否包含「摘要」与「原文内容」，以支持原文页渲染和右侧相关面板。
 
-## 8. 断点续处理与结束 lint
+不再把以下内容作为 lint/health 的默认职责：页面类型与目录是否一致、重复标题、概念/实体别名冲突、页面审美、内容质量评分。发现这些问题时，Agent 可以在 compile/audit 中处理，但不应让健康检查变重。
 
-每次运行 Wiki lane 都会写入：
+### 7.5 audit：处理反馈
+
+用户指出事实错误、来源缺失、结构问题时：
+
+- 明确可修复：修改目标页面，并在 `audit/resolved/` 写 resolved audit 作为记录。
+- 不确定：在 `audit/` 写 open audit，保留 quote、target、severity、author、source、created、status，等待进一步证据。
+- 批量处理：读取所有 open audit，逐个修复目标页、填写 Resolution、改为 resolved 并移动到 `audit/resolved/`。
+- 只要 audit 处理修改了 `wiki-src/` 页面，最后必须运行 `evo-wiki render-wiki`，确保 HTML 与 Markdown 源同步。
+
+## 8. 渲染进度与报告
+
+Python 渲染仍会写入：
 
 ```text
 workspace/artifacts/wiki/progress.json
 ```
 
-该文件用于断点续处理和故障定位，必须记录：
+该文件只描述渲染/报告阶段的进度，用于断点续处理和故障定位，必须记录：
 
 - 当前阶段 `current_phase`。
 - 总页面数 `total_pages`。
@@ -245,23 +300,14 @@ workspace/artifacts/wiki/progress.json
 
 如果渲染中断，Claude Code 应先读取 `progress.json`，再决定从哪一页、哪一类检查或哪一阶段继续，不要盲目重写全部页面。
 
-Wiki 结束时必须运行 lint，并读取：
+Wiki 渲染结束时读取：
 
 ```text
 workspace/artifacts/wiki/reports/wiki-health.json
 workspace/artifacts/wiki/reports/wiki-report.json
 ```
 
-lint 必须覆盖：
-
-- 死链与孤儿页。
-- 页面是否被 `index.md` 收录。
-- 页面类型与目录是否一致。
-- 重复标题与概念 / 实体别名冲突。
-- 原文页是否包含「摘要」与「原文内容」。
-- audit / log 形状是否符合约定。
-
-发现概念冲突时，应优先判断是同义合并、重命名消歧，还是保留两个不同概念并补充上下文说明。
+向用户解释时只报告：HTML 是否生成、链接/索引/audit/log 是否有基础健康问题、原文页结构是否满足 HTML 需要，以及下一步建议。
 
 ## 9. 脚本与样例
 
