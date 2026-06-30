@@ -70,6 +70,28 @@ DEFAULT_WIKI = {
 }
 
 
+LIGHTRAG_CONFIG_EXAMPLE = {
+    "_comment": "Copy this file to lightrag-config.json and fill in your LightRAG service details. lightrag-config.json is gitignored.",
+    "mode": "service",
+    "base_url": "http://127.0.0.1:9621",
+    "api_key_env": "LIGHTRAG_API_KEY",
+    "bearer_token_env": "LIGHTRAG_BEARER_TOKEN",
+    "timeout_seconds": 30,
+}
+
+
+def load_lightrag_config(root: Path) -> dict:
+    """Load lightrag-config.json from *root* and return the lightrag overrides.
+
+    Returns an empty dict when the file doesn't exist, so callers can always
+    deep-merge the result.
+    """
+    cfg_path = root / "lightrag-config.json"
+    if cfg_path.exists():
+        return read_json(cfg_path, {})
+    return {}
+
+
 @dataclass
 class EvoConfig:
     project: dict = field(default_factory=lambda: dict(DEFAULT_PROJECT))
@@ -78,6 +100,10 @@ class EvoConfig:
     @classmethod
     def load(cls, root: Path) -> "EvoConfig":
         project = deep_merge(DEFAULT_PROJECT, read_json(root / "project.json", {}))
+        # Separate lightrag-config.json overrides project.json's lightrag section
+        lightrag_override = load_lightrag_config(root)
+        if lightrag_override:
+            project["lightrag"] = deep_merge(project["lightrag"], lightrag_override)
         wiki = deep_merge(DEFAULT_WIKI, read_json(root / "wiki.json", {}))
         return cls(project=project, wiki=wiki)
 
@@ -85,7 +111,11 @@ class EvoConfig:
     def write_defaults(root: Path, *, overwrite: bool = False) -> None:
         project_path = root / "project.json"
         wiki_path = root / "wiki.json"
+        lightrag_example_path = root / "lightrag-config.example.json"
         if overwrite or not project_path.exists():
             write_json(project_path, DEFAULT_PROJECT)
         if overwrite or not wiki_path.exists():
             write_json(wiki_path, DEFAULT_WIKI)
+        if overwrite or not lightrag_example_path.exists():
+            write_json(lightrag_example_path, LIGHTRAG_CONFIG_EXAMPLE)
+

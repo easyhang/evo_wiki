@@ -15,6 +15,9 @@ design_v3.html
 # Keeps corpus, artifacts, project.json, wiki.json and generated outputs separate from tool code.
 workspace/
 
+# LightRAG connection config (actual values, not the template).
+lightrag-config.json
+
 # Legacy/safety ignores in case --root . is explicitly used in this repository
 /artifacts/
 /corpus/
