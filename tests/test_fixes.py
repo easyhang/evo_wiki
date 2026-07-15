@@ -13,10 +13,10 @@ from evo_wiki.corpus import (
     persist_corpus_state,
     scan_corpus,
 )
-from evo_wiki.docker_export import export_docker
 from evo_wiki.cli import lane_state_path, merge_change_sets
 from evo_wiki.lightrag_lane import build_lightrag
 from evo_wiki.paths import ProjectPaths
+from evo_wiki.platform_export import export_platform
 from evo_wiki.utils import write_json
 from evo_wiki.wiki import markdown_to_html, parse_sources, render_wiki
 from evo_wiki.wiki_health import lint_wiki_artifacts, parse_yaml_frontmatter
@@ -210,22 +210,6 @@ def test_config_load_deep_merges_user_overrides(tmp_path: Path):
     assert config.project["lightrag"]["input_file"] == "artifacts/lightrag/input/documents.jsonl"
 
 
-# --- L3: .dockerignore ------------------------------------------------------
-
-def test_export_docker_writes_dockerignore_once(tmp_path: Path):
-    paths = ProjectPaths.from_root(tmp_path)
-    paths.ensure_base_dirs()
-    result = export_docker(paths)
-    assert result["dockerignore_written"] is True
-    dockerignore = paths.root / ".dockerignore"
-    assert dockerignore.exists()
-    assert "corpus/" in dockerignore.read_text(encoding="utf-8")
-
-    # second run must not overwrite an existing file
-    result2 = export_docker(paths)
-    assert result2["dockerignore_written"] is False
-
-
 # --- L4: queries directory --------------------------------------------------
 
 def test_ensure_base_dirs_creates_lightrag_queries(tmp_path: Path):
@@ -309,6 +293,79 @@ def test_render_wiki_writes_progress_and_lint_metadata(tmp_path: Path):
     assert report["lint"]["report"] == "artifacts/wiki/reports/wiki-health.json"
     assert manifest["progress"] == "artifacts/wiki/progress.json"
     assert manifest["lint_report"] == "artifacts/wiki/reports/wiki-health.json"
+
+
+def test_spa_shell_references_generated_assets(tmp_path: Path):
+    paths = ProjectPaths.from_root(tmp_path)
+    paths.ensure_base_dirs()
+    (paths.wiki_src / "index.md").write_text(
+        "---\ntitle: 首页\ntype: index\nsources: []\n---\n\n# 首页\n",
+        encoding="utf-8",
+    )
+
+    render_wiki(paths, EvoConfig())
+    app_index = (paths.wiki_dist / "app" / "index.html").read_text(encoding="utf-8")
+
+    assert 'href="./app.css"' in app_index
+    assert 'src="./app.js"' in app_index
+    assert (paths.wiki_dist / "app" / "app.css").exists()
+    assert (paths.wiki_dist / "app" / "app.js").exists()
+    assert 'href="../assets/app.css"' not in app_index
+    assert 'src="../assets/app/app.js"' not in app_index
+
+
+def test_export_platform_allows_readonly_graph_label_api(tmp_path: Path):
+    paths = ProjectPaths.from_root(tmp_path)
+    paths.ensure_base_dirs()
+    (paths.wiki_dist / "index.html").write_text("<!doctype html><title>Wiki</title>", encoding="utf-8")
+    write_json(paths.lightrag / "manifest.json", {"status": "success"})
+    write_json(paths.lightrag_reports / "lightrag-report.json", {"status": "success"})
+
+    export_platform(paths, EvoConfig())
+    nginx_conf = (paths.platform / "nginx.conf").read_text(encoding="utf-8")
+    readme = (paths.platform / "README.md").read_text(encoding="utf-8")
+
+    assert "location /api/query" in nginx_conf
+    assert "location /api/graphs" in nginx_conf
+    assert "location /api/graph/label/" in nginx_conf
+    assert "/graph/label/" in nginx_conf
+    assert "/api/graph/label/*" in readme
+    assert "/documents/*" in readme
+
+
+def test_export_platform_requires_successful_lightrag_lane(tmp_path: Path):
+    paths = ProjectPaths.from_root(tmp_path)
+    paths.ensure_base_dirs()
+    (paths.wiki_dist / "index.html").write_text("<!doctype html><title>Wiki</title>", encoding="utf-8")
+
+    try:
+        export_platform(paths, EvoConfig())
+    except RuntimeError as exc:
+        assert "LightRAG lane has not completed successfully" in str(exc)
+    else:
+        raise AssertionError("export_platform should require successful LightRAG artifacts")
+
+
+def test_spa_shell_contains_lightrag_controls_and_shared_style(tmp_path: Path):
+    paths = ProjectPaths.from_root(tmp_path)
+    paths.ensure_base_dirs()
+    (paths.wiki_src / "index.md").write_text(
+        "---\ntitle: 首页\ntype: index\nsources: []\n---\n\n# 首页\n",
+        encoding="utf-8",
+    )
+
+    render_wiki(paths, EvoConfig())
+    app_css = (paths.wiki_dist / "app" / "app.css").read_text(encoding="utf-8")
+    app_js = (paths.wiki_dist / "app" / "app.js").read_text(encoding="utf-8")
+
+    assert "grid-template-columns:minmax(0, 820px) 280px" in app_css
+    assert "font-family:var(--serif)" in app_css
+    assert "qa-mode" in app_js
+    assert "chunk_top_k" in app_js
+    assert "max_entity_tokens" in app_js
+    assert "/api/graph/label/popular" in app_js
+    assert "/api/graph/label/search" in app_js
+    assert "节点详情" in app_js
 
 
 def test_lint_is_demo_style_plus_html_source_structure(tmp_path: Path):

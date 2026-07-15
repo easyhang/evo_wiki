@@ -18,7 +18,8 @@ description: |
 
 | 用户目标 | 使用子 Skill | 目录 |
 |---|---|---|
-| 生成人读静态 Wiki、整理资料、改页面结构、生成 HTML 样例 | Wiki 子 Skill | `skills/evo-wiki-wiki/SKILL.md` |
+| 生成知识平台、可部署站点、默认交付物、未明确说“只要 Wiki” | Wiki 子 Skill + LightRAG 子 Skill，最后 `export-platform` | 两者都用 |
+| 用户明确只要人读静态 Wiki、只生成文档站、不做问答/图谱 | Wiki 子 Skill | `skills/evo-wiki-wiki/SKILL.md` |
 | 接入 Agent 问答 / GraphRAG / 已有 LightRAG 服务 | LightRAG 子 Skill | `skills/evo-wiki-lightrag/SKILL.md` |
 | 先 Wiki 后问答知识库 | 先 Wiki 子 Skill，用户确认后再 LightRAG 子 Skill | 两者分阶段使用 |
 | 用户明确同时要两套产物 | 分别执行两个子 Skill；状态与报告仍保持分离 | 两者都用 |
@@ -35,7 +36,26 @@ Wiki lane 与 LightRAG lane 必须完全分离：
 - 任一 lane 失败，不破坏另一条 lane 已有产物。
 - LightRAG 删除风险必须诚实报告，不得假装增量删除安全完成。
 
-## 3. 子 Skill 职责
+## 3. 默认交付：platform 优先
+
+除非用户明确说“只生成 Wiki / 只要文档站 / 不要问答和图谱”，默认应生成完整只读 Web platform：
+
+```text
+Wiki 静态站 + 问答页 + 图谱页 + 实体枢纽页 + nginx 服务配置
+```
+
+执行规则：
+
+1. 先确认是否已有 LightRAG Server 地址。
+2. 如果用户未提供 LightRAG 地址，必须先询问用户；不要猜测 localhost，也不要静默使用默认地址。
+3. 将 LightRAG 地址写入本地 `lightrag-config.json`（从 `lightrag-config.example.json` 复制；该文件已被 `.gitignore` 忽略）。
+4. 运行 Wiki 与 LightRAG lane：`evo-wiki run --lane both`，或分步 `wiki` 后 `lightrag`。
+5. 运行 `evo-wiki export-platform`，生成 `artifacts/platform/` 与 `nginx.conf`。
+6. 只在用户明确要求“只生成 Wiki”时，才只运行 `evo-wiki run --lane wiki`，不要求 LightRAG 地址。
+
+`lightrag-config.json` 用于保存本地服务地址和可选鉴权配置；真实 credential 不应提交到仓库。若服务需要鉴权，使用 `LIGHTRAG_API_KEY` 或 `LIGHTRAG_BEARER_TOKEN` 环境变量。
+
+## 4. 子 Skill 职责
 
 ### 3.1 Wiki 子 Skill
 
@@ -112,7 +132,6 @@ workspace/artifacts/
   agent/
   wiki/
   lightrag/
-  docker/
 ```
 
 ## 6. 常用命令
