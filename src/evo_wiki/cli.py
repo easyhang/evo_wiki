@@ -8,9 +8,9 @@ from pathlib import Path
 from .artifacts import write_agent_plan, write_run_summary, write_top_manifest
 from .config import EvoConfig
 from .corpus import diff_against_previous, persist_corpus_state, scan_corpus
-from .docker_export import export_docker
 from .lightrag_lane import LightRAGBuildError, build_lightrag, prepare_lightrag_input
 from .paths import ProjectPaths
+from .platform_export import export_platform
 from .utils import read_json, write_json
 from .version import __version__
 from .wiki import ensure_wiki_stub, render_wiki
@@ -59,8 +59,8 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--dry-run", action="store_true", help="Do not call LightRAG service; only report import delta")
     p.set_defaults(func=cmd_build_lightrag)
 
-    p = sub.add_parser("export-docker", help="Export Dockerfiles and docker-compose")
-    add_root(p); p.set_defaults(func=cmd_export_docker)
+    p = sub.add_parser("export-platform", help="Export the read-only Web platform directory (static site + SPA + nginx.conf)")
+    add_root(p); p.set_defaults(func=cmd_export_platform)
 
     p = sub.add_parser("inspect", help="Print top-level manifest and reports")
     add_root(p); p.set_defaults(func=cmd_inspect)
@@ -163,10 +163,10 @@ def cmd_build_lightrag(args: argparse.Namespace) -> int:
     return 0
 
 
-def cmd_export_docker(args: argparse.Namespace) -> int:
-    paths, _ = load(args.root)
+def cmd_export_platform(args: argparse.Namespace) -> int:
+    paths, config = load(args.root)
     paths.ensure_base_dirs()
-    result = export_docker(paths)
+    result = export_platform(paths, config)
     print(json.dumps(result, ensure_ascii=False, indent=2))
     return 0
 

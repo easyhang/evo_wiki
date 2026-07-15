@@ -112,7 +112,6 @@ workspace/artifacts/
   agent/
   wiki/
   lightrag/
-  docker/
 ```
 
 ## 6. 常用命令

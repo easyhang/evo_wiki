@@ -26,7 +26,7 @@ class ProjectPaths:
     lightrag_reports: Path
     lightrag_state: Path
     lightrag_queries: Path
-    docker: Path
+    platform: Path
 
     @classmethod
     def from_root(cls, root: str | Path) -> "ProjectPaths":
@@ -53,7 +53,7 @@ class ProjectPaths:
             lightrag_reports=lightrag / "reports",
             lightrag_state=lightrag / "state",
             lightrag_queries=lightrag / "queries",
-            docker=artifacts / "docker",
+            platform=artifacts / "platform",
         )
 
     def ensure_base_dirs(self) -> None:
@@ -75,6 +75,6 @@ class ProjectPaths:
             self.lightrag_reports,
             self.lightrag_state,
             self.lightrag_queries,
-            self.docker,
+            self.platform,
         ]:
             path.mkdir(parents=True, exist_ok=True)

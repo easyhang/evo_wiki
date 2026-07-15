@@ -10,6 +10,7 @@ from typing import Callable
 
 from .config import EvoConfig
 from .paths import ProjectPaths
+from .spa_assets import write_spa_assets
 from .utils import relpath, slugify, utc_now, write_json
 from .wiki_health import extract_wikilinks, lint_wiki_artifacts, parse_yaml_frontmatter
 
@@ -122,6 +123,8 @@ def render_wiki(paths: ProjectPaths, config: EvoConfig) -> dict:
 
         write_assets(paths)
         update_wiki_progress(paths, progress, "write_assets", "running")
+        write_spa_assets(paths)
+        update_wiki_progress(paths, progress, "write_spa_assets", "running")
         write_search_index(paths, pages)
         update_wiki_progress(paths, progress, "write_search_index", "running", search_entries=len(pages))
         write_dependency_graph(paths, pages, link_map)
@@ -281,7 +284,9 @@ def render_page(
     nav = build_nav(paths, current=current)
     if page_type == "source":
         aside = source_related_panel(markdown, links, current, page_index)
-    elif page_type in {"concept", "entity"}:
+    elif page_type == "entity":
+        aside = graph_hub_panel(md_path.stem) + backlink_related_panel(current, backlink_index)
+    elif page_type == "concept":
         aside = backlink_related_panel(current, backlink_index)
     else:
         aside = ""
@@ -719,6 +724,23 @@ def related_panel_html(groups: dict[str, dict[str, dict]], current: str, *, link
     )
 
 
+def graph_hub_panel(slug: str) -> str:
+    """Entity page aside: a link into the SPA entity hub (/app#entity/<slug>).
+
+    Closes the loop wiki → graph: from an entity's wiki page the reader can
+    jump to its graph neighborhood + preset Q&A in the SPA. Site-root-absolute
+    href so it works at any page depth.
+    """
+    href = f"/app#entity/{html.escape(slug)}"
+    return (
+        '<aside class="page-aside"><div class="related-panel">'
+        '<div class="related-title"><span>知识图谱</span></div>'
+        f'<div class="related-items"><p class="related-excerpt">查看该实体在图谱中的邻域，并直接发起提问。</p>'
+        f'<a class="related-original-link" href="{href}">查看图谱邻域 →</a></div>'
+        "</div></aside>"
+    )
+
+
 
 def build_nav(paths: ProjectPaths, *, current: str) -> str:
     items = []
@@ -806,9 +828,11 @@ def page_template(config: EvoConfig, title: str, nav: str, body: str, *, current
   <script defer src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
   <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.10/dist/katex.min.js"></script>
   <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.10/dist/contrib/auto-render.min.js"></script>
+  <script defer src="{prefix}assets/shared/nav.js"></script>
   <script defer src="{prefix}assets/app.js"></script>
 </head>
 <body data-page-type="{html.escape(page_type)}">
+  <div id="evo-topbar"></div>
   <aside class="sidebar">
     <div class="sidebar-header">
       <a class="logo" href="{home_href}"><span class="logo-icon">📚</span>{site_title}</a>
@@ -833,6 +857,15 @@ def page_template(config: EvoConfig, title: str, nav: str, body: str, *, current
 def write_assets(paths: ProjectPaths) -> None:
     (paths.wiki_dist / "assets" / "style.css").write_text(STYLE, encoding="utf-8")
     (paths.wiki_dist / "assets" / "app.js").write_text(APP_JS, encoding="utf-8")
+    write_shared_assets(paths)
+
+
+def write_shared_assets(paths: ProjectPaths) -> None:
+    """Shared shell: design tokens + cross-app topbar. Single source for wiki + future SPA."""
+    shared = paths.wiki_dist / "assets" / "shared"
+    shared.mkdir(parents=True, exist_ok=True)
+    (shared / "theme.css").write_text(SHARED_THEME, encoding="utf-8")
+    (shared / "nav.js").write_text(SHARED_NAV_JS, encoding="utf-8")
 
 
 def write_search_index(paths: ProjectPaths, pages: list[WikiPage]) -> None:
@@ -876,23 +909,24 @@ def collect_warnings(paths: ProjectPaths, pages: list[WikiPage], health: dict) -
 
 
 STYLE = """
-/* Evo wiki theme — white + blue, clean academic style. */
-:root {
-  color-scheme: light;
-  --bg:#FFFFFF; --bg2:#F5F6F8; --text:#111111; --text2:#555555;
-  --accent:#2563EB; --accent-light:#3B82F6; --accent-glow:rgba(37,99,235,.10);
-  --navy:#FFFFFF; --navy-light:#1E293B; --cream:#F0F4FF;
-  --border:#E5E7EB; --card:#FFFFFF; --link:#2563EB;
-  --serif:'Noto Serif SC','Crimson Pro',Georgia,'Times New Roman',serif;
-  --sans:'DM Sans',-apple-system,BlinkMacSystemFont,'PingFang SC','Microsoft YaHei',sans-serif;
-  --sidebar-w:260px;
-}
+/* Evo wiki layout — white + blue, clean academic style.
+   Design tokens live in shared/theme.css (single source for wiki + future SPA). */
+@import url('shared/theme.css');
 * { box-sizing:border-box; margin:0; padding:0; }
 html { font-size:15px; scroll-behavior:smooth; }
 body { font-family:var(--sans); color:var(--text); background:var(--bg); display:flex; min-height:100vh; line-height:1.8; }
 
+/* ===== CROSS-APP TOPBAR (shared shell) ===== */
+#evo-topbar { position:fixed; top:0; left:0; right:0; height:var(--topbar-h); z-index:200; background:var(--bg); border-bottom:1px solid var(--border); }
+.evo-topbar-inner { max-width:1160px; margin:0 auto; height:100%; display:flex; align-items:center; justify-content:space-between; padding:0 20px; }
+.evo-topbar-brand { color:var(--text); text-decoration:none; font-family:var(--serif); font-size:15px; font-weight:700; }
+.evo-topbar-nav { display:flex; gap:4px; }
+.evo-topbar-link { color:var(--text2); text-decoration:none; font-size:13px; font-weight:500; padding:7px 14px; border-radius:8px; transition:all .15s; }
+.evo-topbar-link:hover { background:var(--accent-glow); color:var(--accent); }
+.evo-topbar-link.active { color:var(--accent); background:var(--accent-glow); font-weight:600; }
+
 /* ===== SIDEBAR ===== */
-.sidebar { width:var(--sidebar-w); background:var(--navy); position:fixed; top:0; left:0; bottom:0; overflow-y:auto; z-index:100; display:flex; flex-direction:column; border-right:1px solid var(--border); }
+.sidebar { width:var(--sidebar-w); background:var(--navy); position:fixed; top:var(--topbar-h); left:0; bottom:0; overflow-y:auto; z-index:100; display:flex; flex-direction:column; border-right:1px solid var(--border); }
 .sidebar-header { padding:20px 16px 16px; border-bottom:1px solid var(--border); }
 .logo { color:var(--text); font-size:17px; font-weight:700; text-decoration:none; letter-spacing:.5px; font-family:var(--serif); display:inline-flex; align-items:center; gap:10px; }
 .logo-icon { font-size:22px; line-height:1; }
@@ -920,7 +954,7 @@ body { font-family:var(--sans); color:var(--text); background:var(--bg); display
 .nav-group-links { padding-bottom:4px; }
 
 /* ===== MAIN / ARTICLE ===== */
-.main { margin-left:max(var(--sidebar-w), calc((100vw - 1160px) / 2)); flex:1; position:relative; max-width:1160px; }
+.main { margin-left:max(var(--sidebar-w), calc((100vw - 1160px) / 2)); flex:1; position:relative; max-width:1160px; padding-top:var(--topbar-h); }
 .content-shell { display:grid; grid-template-columns:minmax(0, 820px) 260px; align-items:start; gap:28px; }
 .article { max-width:820px; padding:48px 48px 80px; }
 .page-aside { padding:48px 24px 80px 0; }
@@ -990,7 +1024,7 @@ body { font-family:var(--sans); color:var(--text); background:var(--bg); display
 
 @media (max-width: 980px) {
   body { display:block; }
-  .sidebar { position:static; width:auto; bottom:auto; }
+  .sidebar { position:static; width:auto; bottom:auto; top:auto; }
   .main { margin-left:0; max-width:100%; }
   .content-shell { display:block; }
   .article { padding:28px 22px 36px; }
@@ -1040,4 +1074,48 @@ function initEnhancements(){
 }
 initSearch();
 window.addEventListener('load', initEnhancements);
+"""
+
+
+# ===== Shared shell: design tokens + cross-app topbar =====
+# Single source of truth for theme + navigation. render-wiki (wiki pages) and
+# the future SPA both reference assets/shared/{theme.css,nav.js}, so the two
+# surfaces never drift. See design_update/2026-07-14.html §3 (共享壳).
+
+SHARED_THEME = """
+/* Evo wiki shared design tokens — single source for wiki + future SPA. */
+:root {
+  color-scheme: light;
+  --bg:#FFFFFF; --bg2:#F5F6F8; --text:#111111; --text2:#555555;
+  --accent:#2563EB; --accent-light:#3B82F6; --accent-glow:rgba(37,99,235,.10);
+  --navy:#FFFFFF; --navy-light:#1E293B; --cream:#F0F4FF;
+  --border:#E5E7EB; --card:#FFFFFF; --link:#2563EB;
+  --serif:'Noto Serif SC','Crimson Pro',Georgia,'Times New Roman',serif;
+  --sans:'DM Sans',-apple-system,BlinkMacSystemFont,'PingFang SC','Microsoft YaHei',sans-serif;
+  --sidebar-w:260px;
+  --topbar-h:48px;
+}
+"""
+
+
+SHARED_NAV_JS = """
+/* Cross-app topbar: [Wiki | 问答 | 图谱]. Renders into #evo-topbar, highlights
+   the current surface by URL. Links point at / (Wiki) and /app (问答/图谱, SPA
+   to be built). Both wiki pages and the future SPA load this single file. */
+(function () {
+  var mount = document.getElementById('evo-topbar');
+  if (!mount) return;
+  var onApp = location.pathname.indexOf('/app') === 0;
+  var hash = location.hash || '';
+  var tabs = [
+    { key: 'wiki', label: 'Wiki', href: '/', active: !onApp },
+    { key: 'qa', label: '问答', href: '/app', active: onApp && hash.indexOf('#graph') !== 0 },
+    { key: 'graph', label: '图谱', href: '/app#graph', active: onApp && hash.indexOf('#graph') === 0 }
+  ];
+  var links = tabs.map(function (t) {
+    var cls = 'evo-topbar-link' + (t.active ? ' active' : '');
+    return '<a class="' + cls + '" href="' + t.href + '">' + t.label + '</a>';
+  }).join('');
+  mount.innerHTML = '<div class="evo-topbar-inner"><a class="evo-topbar-brand" href="/">📚 Evo Wiki</a><nav class="evo-topbar-nav">' + links + '</nav></div>';
+})();
 """

@@ -10,7 +10,6 @@
 - `lightrag` lane：从 `corpus/` 准备 LightRAG 输入，并提交到一个已有的 LightRAG Server 服务。
 - `artifacts` 协议：写入顶层 `manifest.json`、lane manifest、reports、state、agent plan/summary。
 - 增量基础：扫描 corpus hash，输出 added / modified / deleted change set。
-- Docker 导出：按已存在产物导出 Wiki Dockerfile / compose，并提供外部 LightRAG 服务配置样例。
 - 完全分离：Wiki 与 LightRAG 可以独立运行、独立更新、独立部署。
 
 ## Skill 拆分
@@ -214,7 +213,7 @@ skills/evo-wiki-wiki/examples/learnbuffett-style/
 | `evo-wiki prepare-lightrag` | 生成 LightRAG 输入包 |
 | `evo-wiki build-lightrag` | 调用已有 LightRAG Server API 提交输入文档 |
 | `evo-wiki run --lane wiki|lightrag|both` | 编排运行一个或两个 lane |
-| `evo-wiki export-docker` | 导出 Wiki Docker 交付物与外部 LightRAG 服务配置样例 |
+| `evo-wiki export-platform` | 导出完整只读 Web 平台目录（Wiki + 问答 + 图谱 + SPA + nginx.conf）；需先成功运行 Wiki 与 LightRAG lane |
 | `evo-wiki inspect` | 查看 manifest 和报告 |
 
 ## 项目结构
@@ -262,7 +261,6 @@ evo-wiki/
         reports/lightrag-report.json
         state/lightrag-import-ledger.json
         queries/
-      docker/
 ```
 
 ## Claude Code 与 Python 的分工
@@ -283,7 +281,6 @@ Python：
 - 生成搜索索引、依赖图、进度文件和报告。
 - 执行轻量健康检查：demo 风格链接/索引/audit/log 检查 + HTML 必需的原文页结构检查。
 - 准备 LightRAG 输入并调用已有 LightRAG Server API。
-- 导出 Docker 交付物。
 
 ## 设计边界
 
