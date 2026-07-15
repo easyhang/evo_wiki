@@ -29,7 +29,7 @@ DEFAULT_PROJECT = {
     "artifacts_dir": "artifacts",
     "lightrag": {
         "mode": "service",
-        "base_url": "http://127.0.0.1:9621",
+        "base_url": "",
         "api_key_env": "LIGHTRAG_API_KEY",
         "bearer_token_env": "LIGHTRAG_BEARER_TOKEN",
         "input_file": "artifacts/lightrag/input/documents.jsonl",
@@ -71,9 +71,9 @@ DEFAULT_WIKI = {
 
 
 LIGHTRAG_CONFIG_EXAMPLE = {
-    "_comment": "Copy this file to lightrag-config.json and fill in your LightRAG service details. lightrag-config.json is gitignored.",
+    "_comment": "Copy this file to lightrag-config.json and fill in your LightRAG service details. lightrag-config.json is gitignored. base_url is required before running the LightRAG lane or export-platform.",
     "mode": "service",
-    "base_url": "http://127.0.0.1:9621",
+    "base_url": "http://YOUR_LIGHTRAG_SERVER:9621",
     "api_key_env": "LIGHTRAG_API_KEY",
     "bearer_token_env": "LIGHTRAG_BEARER_TOKEN",
     "timeout_seconds": 30,

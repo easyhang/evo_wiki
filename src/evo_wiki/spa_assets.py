@@ -7,14 +7,20 @@ Wiki and app surfaces look like one system.
 """
 from __future__ import annotations
 
+import html
+
+from .config import EvoConfig
 from .paths import ProjectPaths
 
 
-def write_spa_assets(paths: ProjectPaths) -> None:
+def write_spa_assets(paths: ProjectPaths, config: EvoConfig) -> None:
     """Write the fixed SPA shell into ``wiki dist/app/``."""
     app_dir = paths.wiki_dist / "app"
     app_dir.mkdir(parents=True, exist_ok=True)
-    (app_dir / "index.html").write_text(SPA_INDEX_HTML, encoding="utf-8")
+    site_title = html.escape(config.wiki.get("title", "Evo Wiki"))
+    (app_dir / "index.html").write_text(
+        SPA_INDEX_HTML.replace("{{site_title}}", site_title), encoding="utf-8"
+    )
     (app_dir / "app.css").write_text(SPA_CSS, encoding="utf-8")
     (app_dir / "app.js").write_text(SPA_JS, encoding="utf-8")
 
@@ -33,7 +39,7 @@ SPA_INDEX_HTML = """<!doctype html>
   <script defer src="../assets/shared/nav.js"></script>
   <script defer src="./app.js"></script>
 </head>
-<body>
+<body data-site-title="{{site_title}}">
   <div id="evo-topbar"></div>
   <main class="spa-main">
     <section id="view-qa" class="spa-view"></section>
@@ -46,17 +52,10 @@ SPA_INDEX_HTML = """<!doctype html>
 
 
 SPA_CSS = """
-/* SPA layout uses the same shared tokens and topbar classes as Wiki pages. */
+/* SPA layout uses the same shared tokens and topbar (from shared/theme.css) as Wiki. */
 * { box-sizing:border-box; }
 html { font-size:15px; scroll-behavior:smooth; }
 body { margin:0; font-family:var(--sans); color:var(--text); background:var(--bg); line-height:1.8; }
-#evo-topbar { position:fixed; top:0; left:0; right:0; height:var(--topbar-h); z-index:200; background:var(--bg); border-bottom:1px solid var(--border); }
-.evo-topbar-inner { max-width:1160px; margin:0 auto; height:100%; display:flex; align-items:center; justify-content:space-between; padding:0 20px; }
-.evo-topbar-brand { color:var(--text); text-decoration:none; font-family:var(--serif); font-size:15px; font-weight:700; }
-.evo-topbar-nav { display:flex; gap:4px; }
-.evo-topbar-link { color:var(--text2); text-decoration:none; font-size:13px; font-weight:500; padding:7px 14px; border-radius:8px; transition:all .15s; }
-.evo-topbar-link:hover { background:var(--accent-glow); color:var(--accent); }
-.evo-topbar-link.active { color:var(--accent); background:var(--accent-glow); font-weight:600; }
 
 .spa-main { max-width:1160px; margin:0 auto; padding:calc(var(--topbar-h) + 32px) 24px 80px; }
 .spa-view { display:none; }
@@ -64,10 +63,10 @@ body { margin:0; font-family:var(--sans); color:var(--text); background:var(--bg
 .spa-shell { display:grid; grid-template-columns:minmax(0, 820px) 280px; gap:28px; align-items:start; }
 .spa-article { min-width:0; }
 .spa-aside { position:sticky; top:calc(var(--topbar-h) + 28px); }
-.spa-h1 { font-family:var(--serif); font-size:30px; font-weight:900; line-height:1.3; color:#111; margin:0 0 8px; letter-spacing:-.5px; }
+.spa-h1 { font-family:var(--serif); font-size:30px; font-weight:900; line-height:1.3; color:var(--heading); margin:0 0 8px; letter-spacing:-.5px; }
 .spa-sub { color:var(--text2); font-size:14px; margin:0 0 24px; max-width:720px; }
 .spa-card { background:var(--card); border:1px solid var(--border); border-radius:12px; padding:18px 20px; margin-bottom:18px; }
-.spa-card h3, .spa-card h4 { font-family:var(--serif); color:#111; margin:0 0 10px; line-height:1.35; }
+.spa-card h3, .spa-card h4 { font-family:var(--serif); color:var(--heading2); margin:0 0 10px; line-height:1.35; }
 .spa-card h3 { font-size:17px; }
 .spa-card h4 { font-size:15px; }
 .spa-muted { color:var(--text2); font-size:13px; }
@@ -78,21 +77,21 @@ body { margin:0; font-family:var(--sans); color:var(--text); background:var(--bg
 .spa-input:focus, .spa-textarea:focus, .spa-select:focus { outline:none; border-color:var(--accent); box-shadow:0 0 0 3px var(--accent-glow); }
 .spa-btn { display:inline-flex; align-items:center; justify-content:center; gap:6px; border:0; background:var(--accent); color:#fff; border-radius:8px; padding:10px 16px; font-size:14px; font-weight:600; cursor:pointer; font-family:var(--sans); white-space:nowrap; }
 .spa-btn.secondary { background:var(--bg2); color:var(--text); border:1px solid var(--border); }
-.spa-btn:hover { filter:brightness(.98); }
+.spa-btn:hover { filter:brightness(.94); }
 .spa-btn:disabled { opacity:.55; cursor:not-allowed; }
 .spa-field { margin-bottom:12px; }
 .spa-field label { display:block; color:var(--text2); font-size:12px; font-weight:600; margin:0 0 5px; }
 .spa-grid-2 { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
 .spa-chiprow { display:flex; flex-wrap:wrap; gap:7px; margin-top:10px; }
 .spa-chip { border:1px solid var(--border); background:var(--bg); color:var(--text2); border-radius:999px; padding:4px 10px; font-size:12px; cursor:pointer; }
-.spa-chip:hover { color:var(--accent); border-color:rgba(37,99,235,.28); background:var(--accent-glow); }
+.spa-chip:hover { color:var(--accent); border-color:var(--accent-border); background:var(--accent-glow); }
 .spa-chat { display:flex; flex-direction:column; gap:12px; }
 .spa-message { border:1px solid var(--border); border-radius:12px; padding:14px 16px; background:var(--card); }
-.spa-message.user { background:var(--accent-glow); border-color:rgba(37,99,235,.18); }
+.spa-message.user { background:var(--accent-glow); border-color:var(--accent-border); }
 .spa-role { color:var(--text2); font-size:11px; text-transform:uppercase; letter-spacing:.08em; font-weight:700; margin-bottom:5px; }
 .spa-answer { white-space:pre-wrap; font-size:15px; color:var(--text); line-height:1.85; }
 .spa-loading { color:var(--text2); font-size:14px; }
-.spa-error { color:#c92a3a; font-size:14px; }
+.spa-error { color:var(--danger); font-size:14px; }
 .spa-refs { margin-top:14px; border-top:1px solid var(--border); padding-top:12px; }
 .spa-refs h4 { font-size:12px; text-transform:uppercase; letter-spacing:.06em; color:var(--text2); margin-bottom:8px; font-family:var(--sans); }
 .spa-ref { display:block; padding:8px 0; color:var(--link); text-decoration:none; border-bottom:1px solid var(--border); font-size:13px; }
@@ -100,7 +99,7 @@ body { margin:0; font-family:var(--sans); color:var(--text); background:var(--bg
 .spa-graph-canvas { background:var(--bg2); border:1px solid var(--border); border-radius:12px; min-height:430px; padding:12px; overflow:auto; position:relative; }
 .spa-graph-canvas svg { width:100%; min-width:720px; height:auto; display:block; }
 .spa-graph-node { fill:var(--accent); stroke:#fff; stroke-width:2px; cursor:pointer; }
-.spa-graph-node:hover, .spa-graph-node.selected { fill:#7C3AED; }
+.spa-graph-node:hover, .spa-graph-node.selected { fill:var(--accent-strong); }
 .spa-graph-label { font-size:11px; font-family:var(--sans); fill:var(--text); text-anchor:middle; pointer-events:none; }
 .spa-graph-edge { stroke:var(--text2); stroke-opacity:.35; stroke-width:1.2px; }
 .spa-graph-edge-label { font-size:10px; fill:var(--text2); opacity:.78; }
@@ -161,7 +160,7 @@ SPA_JS = """
     if (!refs.length) return '';
     return '<div class="spa-refs"><h4>参考来源 (' + refs.length + ')</h4>' + refs.map(function (ref, i) {
       var file = ref.file_path || ref.source || ref.path || ref.file || ('来源 ' + (i + 1));
-      var content = asArray(ref.content).join('\n').slice(0, 260);
+      var content = asArray(ref.content).join('\\n').slice(0, 260);
       return '<a class="spa-ref" href="#"><span>' + escapeHtml(file) + '</span>' + (content ? '<small>' + escapeHtml(content) + '</small>' : '') + '</a>';
     }).join('') + '</div>';
   }

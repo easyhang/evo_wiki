@@ -33,7 +33,7 @@ python3 -m venv .venv
 pip install -e .
 ```
 
-> Evo Wiki 不再在本进程内安装或启动 `lightrag-hku`。真实写入 LightRAG 时，需要先准备一个已运行的 LightRAG Server；默认地址是 `http://127.0.0.1:9621`，可通过 `project.json` 的 `lightrag.base_url` 或环境变量 `LIGHTRAG_BASE_URL` 覆盖。若服务启用了 API key 或登录鉴权，分别设置 `LIGHTRAG_API_KEY` 或 `LIGHTRAG_BEARER_TOKEN`。
+> Evo Wiki 不再在本进程内安装或启动 `lightrag-hku`。生成完整 platform 时必须先准备一个已运行的 LightRAG Server，并把地址写入本地配置文件 `lightrag-config.json`（从 `lightrag-config.example.json` 复制，已被 `.gitignore` 忽略）。如果用户未提供 LightRAG 地址，应先询问用户，不要猜测 localhost。若服务启用了 API key 或登录鉴权，分别设置 `LIGHTRAG_API_KEY` 或 `LIGHTRAG_BEARER_TOKEN`。
 
 ## 运行数据目录
 
@@ -73,7 +73,66 @@ evo-wiki init
 cp /path/to/source.md workspace/corpus/raw/
 ```
 
-### 只生成 Wiki
+### 默认：生成完整 platform
+
+除非用户明确说“只生成 Wiki / 只要文档站 / 不要问答和图谱”，默认目标应是生成完整只读 Web platform：
+
+```text
+Wiki 静态站 + 问答页 + 图谱页 + 实体枢纽页 + nginx 服务配置
+```
+
+执行顺序：
+
+1. 准备 LightRAG 地址配置（必需）：
+
+```bash
+cp lightrag-config.example.json lightrag-config.json
+# 编辑 lightrag-config.json，把 base_url 改为真实 LightRAG Server，例如：
+# { "base_url": "http://172.20.105.79:9621" }
+```
+
+`lightrag-config.json` 已被 `.gitignore` 忽略，用于保存本地服务地址和可选鉴权配置。若用户未提供 LightRAG 地址，应先向用户询问。
+
+2. 生成 Wiki 与 LightRAG lane：
+
+```bash
+evo-wiki run --lane both
+```
+
+3. 导出 platform 目录和 nginx 配置：
+
+```bash
+evo-wiki export-platform
+```
+
+输出：
+
+```text
+workspace/artifacts/platform/
+  index.html              # Wiki
+  app/                    # 问答 / 图谱 / 实体枢纽 SPA
+  assets/shared/          # Wiki + SPA 共享主题和导航
+  status/                 # LightRAG 状态快照
+  nginx.conf              # 静态站 + LightRAG 只读代理
+  README.md               # 运行说明
+```
+
+4. 启动 nginx：
+
+```bash
+cd workspace/artifacts/platform
+nginx -p . -c nginx.conf
+```
+
+访问：
+
+```text
+http://localhost:8080/          # Wiki
+http://localhost:8080/app       # 问答
+http://localhost:8080/app#graph # 图谱
+```
+
+### 只生成 Wiki（用户明确要求时）
 
 Wiki lane 采用 `llm-wiki-demo` 式 Skill 化工作法：**Claude Code 通过自然语言操作 Markdown Wiki 源文件，Python CLI 只负责渲染、轻量 lint、报告和静态 HTML 交付**。
 
@@ -137,10 +196,14 @@ workspace/artifacts/wiki/state/wiki-dependency-graph.json
 
 ### 只更新 LightRAG 服务
 
-先确认已有 LightRAG Server 正在运行：
+先确认已有 LightRAG Server 正在运行，并把地址写入本地配置：
 
 ```bash
-export LIGHTRAG_BASE_URL=http://127.0.0.1:9621
+cp lightrag-config.example.json lightrag-config.json
+# 编辑 lightrag-config.json:
+# {
+#   "base_url": "http://172.20.105.79:9621"
+# }
 # 如服务启用了 API key：
 # export LIGHTRAG_API_KEY=...
 # 如服务使用登录后获得的 Bearer token：
@@ -168,22 +231,27 @@ workspace/artifacts/lightrag/queries/smoke-test.json   # 仅传入 --smoke-query
 evo-wiki run --lane lightrag --lightrag-dry-run
 ```
 
-### 推荐路径：先 Wiki，后 LightRAG
+### 推荐路径：默认生成 platform
+
+```bash
+# 1. 用户提供 LightRAG Server 地址后，写入被 ignore 的本地配置
+cp lightrag-config.example.json lightrag-config.json
+# 编辑 lightrag-config.json 的 base_url
+
+# 2. 运行 Wiki + LightRAG 两条 lane
+evo-wiki run --lane both
+
+# 3. 导出完整 platform（同时产 nginx.conf）
+evo-wiki export-platform
+```
+
+如果用户明确要求先审阅 Wiki、暂不做问答/图谱，则只运行：
 
 ```bash
 evo-wiki run --lane wiki
-# 用户审阅 workspace/artifacts/wiki/dist/index.html
-# 确认后：
-evo-wiki run --lane lightrag
 ```
 
-### 同时运行两条 lane
-
-```bash
-evo-wiki run --lane both
-```
-
-注意：即使同时运行，两条 lane 的产物、状态、报告仍然分离。
+注意：即使生成 platform，Wiki 与 LightRAG 两条 lane 的产物、状态、报告仍然分离。
 
 ## HTML 样例
 

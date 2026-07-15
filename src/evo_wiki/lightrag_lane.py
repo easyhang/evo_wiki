@@ -207,7 +207,12 @@ class LightRAGServiceClient:
 
 def resolve_lightrag_service_config(config: dict[str, Any] | None = None) -> dict[str, Any]:
     cfg = config or {}
-    base_url = os.environ.get("LIGHTRAG_BASE_URL") or cfg.get("base_url") or DEFAULT_LIGHTRAG_SERVICE_URL
+    base_url = os.environ.get("LIGHTRAG_BASE_URL") or cfg.get("base_url")
+    if not base_url or "YOUR_LIGHTRAG_SERVER" in str(base_url):
+        raise LightRAGBuildError(
+            "LightRAG base_url is required. Create `lightrag-config.json` from "
+            "`lightrag-config.example.json` and set `base_url`, or set LIGHTRAG_BASE_URL."
+        )
     api_key_env = cfg.get("api_key_env", "LIGHTRAG_API_KEY")
     bearer_token_env = cfg.get("bearer_token_env", "LIGHTRAG_BEARER_TOKEN")
     api_key = os.environ.get(api_key_env) or cfg.get("api_key")

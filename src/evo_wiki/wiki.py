@@ -123,7 +123,7 @@ def render_wiki(paths: ProjectPaths, config: EvoConfig) -> dict:
 
         write_assets(paths)
         update_wiki_progress(paths, progress, "write_assets", "running")
-        write_spa_assets(paths)
+        write_spa_assets(paths, config)
         update_wiki_progress(paths, progress, "write_spa_assets", "running")
         write_search_index(paths, pages)
         update_wiki_progress(paths, progress, "write_search_index", "running", search_entries=len(pages))
@@ -831,7 +831,7 @@ def page_template(config: EvoConfig, title: str, nav: str, body: str, *, current
   <script defer src="{prefix}assets/shared/nav.js"></script>
   <script defer src="{prefix}assets/app.js"></script>
 </head>
-<body data-page-type="{html.escape(page_type)}">
+<body data-page-type="{html.escape(page_type)}" data-site-title="{site_title}">
   <div id="evo-topbar"></div>
   <aside class="sidebar">
     <div class="sidebar-header">
@@ -916,24 +916,17 @@ STYLE = """
 html { font-size:15px; scroll-behavior:smooth; }
 body { font-family:var(--sans); color:var(--text); background:var(--bg); display:flex; min-height:100vh; line-height:1.8; }
 
-/* ===== CROSS-APP TOPBAR (shared shell) ===== */
-#evo-topbar { position:fixed; top:0; left:0; right:0; height:var(--topbar-h); z-index:200; background:var(--bg); border-bottom:1px solid var(--border); }
-.evo-topbar-inner { max-width:1160px; margin:0 auto; height:100%; display:flex; align-items:center; justify-content:space-between; padding:0 20px; }
-.evo-topbar-brand { color:var(--text); text-decoration:none; font-family:var(--serif); font-size:15px; font-weight:700; }
-.evo-topbar-nav { display:flex; gap:4px; }
-.evo-topbar-link { color:var(--text2); text-decoration:none; font-size:13px; font-weight:500; padding:7px 14px; border-radius:8px; transition:all .15s; }
-.evo-topbar-link:hover { background:var(--accent-glow); color:var(--accent); }
-.evo-topbar-link.active { color:var(--accent); background:var(--accent-glow); font-weight:600; }
+/* Cross-app topbar styles are defined once in shared/theme.css (imported above). */
 
 /* ===== SIDEBAR ===== */
-.sidebar { width:var(--sidebar-w); background:var(--navy); position:fixed; top:var(--topbar-h); left:0; bottom:0; overflow-y:auto; z-index:100; display:flex; flex-direction:column; border-right:1px solid var(--border); }
+.sidebar { width:var(--sidebar-w); background:var(--sidebar-bg); position:fixed; top:var(--topbar-h); left:0; bottom:0; overflow-y:auto; z-index:100; display:flex; flex-direction:column; border-right:1px solid var(--border); }
 .sidebar-header { padding:20px 16px 16px; border-bottom:1px solid var(--border); }
 .logo { color:var(--text); font-size:17px; font-weight:700; text-decoration:none; letter-spacing:.5px; font-family:var(--serif); display:inline-flex; align-items:center; gap:10px; }
 .logo-icon { font-size:22px; line-height:1; }
 .sidebar-search { padding:14px 12px 6px; }
 .sidebar-search input { width:100%; border:1px solid var(--border); background:var(--bg2); color:var(--text); border-radius:8px; padding:9px 12px; font-size:13px; font-family:var(--sans); }
 .sidebar-search input::placeholder { color:#999; }
-.sidebar-search input:focus { outline:none; border-color:var(--accent); }
+.sidebar-search input:focus { outline:none; border-color:var(--accent); box-shadow:0 0 0 3px var(--accent-glow); }
 #search-results { margin-top:6px; }
 #search-results a { display:block; color:var(--text2); text-decoration:none; padding:7px 10px; border-radius:6px; font-size:12px; }
 #search-results a:hover { background:var(--accent-glow); color:var(--accent); }
@@ -992,18 +985,18 @@ body { font-family:var(--sans); color:var(--text); background:var(--bg); display
 .type-badge { font-size:11px; padding:2px 9px; border-radius:4px; color:#fff; font-weight:600; letter-spacing:.5px; }
 .type-concept { background:#2563EB; }
 .type-entity  { background:#0891B2; }
-.type-source  { background:#7C3AED; }
+.type-source  { background:var(--accent-strong); }
 .type-index   { background:#6B7280; }
 .type-page    { background:#4B5563; }
 
-.article h1 { font-family:var(--serif); font-size:30px; line-height:1.3; margin-bottom:24px; font-weight:900; color:#111; letter-spacing:-.5px; }
-.article h2 { font-family:var(--serif); font-size:21px; margin:36px 0 14px; padding-bottom:8px; border-bottom:2px solid var(--border); font-weight:700; color:#111; }
-.article h3 { font-family:var(--serif); font-size:17px; margin:24px 0 10px; font-weight:600; color:#1E293B; }
-.article h4 { font-family:var(--serif); font-size:15px; margin:18px 0 8px; font-weight:600; color:#1E293B; }
+.article h1 { font-family:var(--serif); font-size:30px; line-height:1.3; margin-bottom:24px; font-weight:900; color:var(--heading); letter-spacing:-.5px; }
+.article h2 { font-family:var(--serif); font-size:21px; margin:36px 0 14px; padding-bottom:8px; border-bottom:2px solid var(--border); font-weight:700; color:var(--heading); }
+.article h3 { font-family:var(--serif); font-size:17px; margin:24px 0 10px; font-weight:600; color:var(--heading2); }
+.article h4 { font-family:var(--serif); font-size:15px; margin:18px 0 8px; font-weight:600; color:var(--heading2); }
 .article p { margin:10px 0; }
 .article ul, .article ol { padding-left:24px; margin:10px 0; }
 .article li { margin:4px 0; }
-.article a { color:var(--link); text-decoration:none; border-bottom:1px solid rgba(37,99,235,.25); }
+.article a { color:var(--link); text-decoration:none; border-bottom:1px solid var(--accent-border); }
 .article a:hover { border-bottom-color:var(--accent); }
 
 .article a.wikilink { color:var(--link); text-decoration:none; border-bottom:none; background:linear-gradient(to bottom,transparent 60%,var(--accent-glow) 60%); transition:background .2s; font-weight:500; }
@@ -1016,16 +1009,16 @@ body { font-family:var(--sans); color:var(--text); background:var(--bg); display
 .article pre code { background:none; color:inherit; padding:0; }
 .article table { border-collapse:collapse; width:100%; margin:16px 0; font-size:14px; }
 .article th, .article td { border:1px solid var(--border); padding:8px 12px; text-align:left; }
-.article th { background:var(--bg2); font-weight:600; color:#111; }
+.article th { background:var(--bg2); font-weight:600; color:var(--heading); }
 .article hr { border:none; border-top:1px solid var(--border); margin:32px 0; }
 
 .mermaid { background:var(--card); border:1px solid var(--border); border-radius:12px; padding:16px; margin:18px 0; }
 .math-block { overflow:auto; padding:12px 0; }
 
 @media (max-width: 980px) {
-  body { display:block; }
+  body { display:block; padding-top:var(--topbar-h); }
   .sidebar { position:static; width:auto; bottom:auto; top:auto; }
-  .main { margin-left:0; max-width:100%; }
+  .main { margin-left:0; max-width:100%; padding-top:0; }
   .content-shell { display:block; }
   .article { padding:28px 22px 36px; }
   .page-aside { padding:0 22px 48px; }
@@ -1083,39 +1076,56 @@ window.addEventListener('load', initEnhancements);
 # surfaces never drift. See design_update/2026-07-14.html §3 (共享壳).
 
 SHARED_THEME = """
-/* Evo wiki shared design tokens — single source for wiki + future SPA. */
+/* Evo wiki shared design tokens + shared components — single source for wiki + SPA. */
 :root {
   color-scheme: light;
   --bg:#FFFFFF; --bg2:#F5F6F8; --text:#111111; --text2:#555555;
-  --accent:#2563EB; --accent-light:#3B82F6; --accent-glow:rgba(37,99,235,.10);
-  --navy:#FFFFFF; --navy-light:#1E293B; --cream:#F0F4FF;
+  --heading:#111111; --heading2:#1E293B;
+  --accent:#2563EB; --accent-light:#3B82F6; --accent-strong:#7C3AED;
+  --accent-glow:rgba(37,99,235,.10); --accent-border:rgba(37,99,235,.25);
+  --danger:#C92A3A;
+  --sidebar-bg:#FFFFFF; --cream:#F0F4FF;
   --border:#E5E7EB; --card:#FFFFFF; --link:#2563EB;
   --serif:'Noto Serif SC','Crimson Pro',Georgia,'Times New Roman',serif;
   --sans:'DM Sans',-apple-system,BlinkMacSystemFont,'PingFang SC','Microsoft YaHei',sans-serif;
   --sidebar-w:260px;
   --topbar-h:48px;
 }
+
+/* Cross-app topbar (shared shell): identical on Wiki + SPA, defined once here so
+   the two surfaces can never drift. Both style.css and app.css inherit it. */
+#evo-topbar { position:fixed; top:0; left:0; right:0; height:var(--topbar-h); z-index:200; background:var(--bg); border-bottom:1px solid var(--border); }
+.evo-topbar-inner { max-width:1160px; margin:0 auto; height:100%; display:flex; align-items:center; justify-content:space-between; padding:0 20px; }
+.evo-topbar-brand { color:var(--text); text-decoration:none; font-family:var(--serif); font-size:15px; font-weight:700; }
+.evo-topbar-nav { display:flex; gap:4px; }
+.evo-topbar-link { color:var(--text2); text-decoration:none; font-size:13px; font-weight:500; padding:7px 14px; border-radius:8px; transition:all .15s; }
+.evo-topbar-link:hover { background:var(--accent-glow); color:var(--accent); }
+.evo-topbar-link.active { color:var(--accent); background:var(--accent-glow); font-weight:600; }
 """
 
 
 SHARED_NAV_JS = """
 /* Cross-app topbar: [Wiki | 问答 | 图谱]. Renders into #evo-topbar, highlights
-   the current surface by URL. Links point at / (Wiki) and /app (问答/图谱, SPA
-   to be built). Both wiki pages and the future SPA load this single file. */
+   the current surface by URL. Links point at / (Wiki) and /app (问答/图谱). The
+   brand name is read from <body data-site-title> so it matches the sidebar logo;
+   both wiki pages and the SPA load this single file. */
 (function () {
   var mount = document.getElementById('evo-topbar');
   if (!mount) return;
+  var siteTitle = (document.body && document.body.dataset && document.body.dataset.siteTitle) || 'Evo Wiki';
   var onApp = location.pathname.indexOf('/app') === 0;
   var hash = location.hash || '';
+  var onGraph = onApp && (hash.indexOf('#graph') === 0 || hash.indexOf('#entity/') === 0);
   var tabs = [
     { key: 'wiki', label: 'Wiki', href: '/', active: !onApp },
-    { key: 'qa', label: '问答', href: '/app', active: onApp && hash.indexOf('#graph') !== 0 },
-    { key: 'graph', label: '图谱', href: '/app#graph', active: onApp && hash.indexOf('#graph') === 0 }
+    { key: 'qa', label: '问答', href: '/app', active: onApp && !onGraph },
+    { key: 'graph', label: '图谱', href: '/app#graph', active: onGraph }
   ];
   var links = tabs.map(function (t) {
     var cls = 'evo-topbar-link' + (t.active ? ' active' : '');
     return '<a class="' + cls + '" href="' + t.href + '">' + t.label + '</a>';
   }).join('');
-  mount.innerHTML = '<div class="evo-topbar-inner"><a class="evo-topbar-brand" href="/">📚 Evo Wiki</a><nav class="evo-topbar-nav">' + links + '</nav></div>';
+  function esc(s) { return String(s).replace(/[&<>"]/g, function (c) { return { '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;' }[c]; }); }
+  mount.innerHTML = '<div class="evo-topbar-inner"><a class="evo-topbar-brand" href="/">' + esc(siteTitle) + '</a><nav class="evo-topbar-nav">' + links + '</nav></div>';
 })();
 """

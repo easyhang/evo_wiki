@@ -46,7 +46,13 @@ def export_platform(paths: ProjectPaths, config: EvoConfig) -> dict:
             "or `evo-wiki run --lane both` before export-platform so Q&A and graph pages are backed by LightRAG."
         )
 
-    base_url = config.project.get("lightrag", {}).get("base_url", "http://127.0.0.1:9621")
+    base_url = str(config.project.get("lightrag", {}).get("base_url") or "").strip().rstrip("/")
+    if not base_url or "YOUR_LIGHTRAG_SERVER" in base_url:
+        raise RuntimeError(
+            "LightRAG base_url is required for platform export. Create `lightrag-config.json` "
+            "from `lightrag-config.example.json` and set `base_url` to your LightRAG Server, "
+            "for example {\"base_url\": \"http://172.20.105.79:9621\"}."
+        )
 
     # Fresh platform dir.
     if paths.platform.exists():
