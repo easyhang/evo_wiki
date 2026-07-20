@@ -1,358 +1,456 @@
-# Evo wiki
+# Evo Wiki
 
-**Evo wiki 是面向 Claude Code 的 LLM Wiki 知识平台开发工具。**
+Evo Wiki 是面向二次开发者的 AI 驱动知识平台生成器。
 
-它不是 CLI-first 的传统工具箱，而是 Claude Code-first / AI-native 的开发工具：用户用自然语言描述目标，Claude Code 负责决策与内容生成，Python 工具负责可重复、可验证、可恢复的底层动作。
+它把“内容生成”和“工程构建”分成两层：
 
-## 首版 MVP 能力
+- Codex、Claude Code 等 Agent 按 Skill 理解项目语料，生成可追溯的 Wiki 正文；
+- `evo-wiki generate` 自动完成状态迁移、Wiki 渲染、LightRAG 同步、查询网关检查和平台导出。
 
-- `wiki` lane：吸收 `llm-wiki-demo` 的可演进 Markdown Wiki 做法，由 Claude Code 维护 `index + concepts/entities/sources + audit/log`，再由 Python 渲染为最终静态 HTML 页面。
-- `lightrag` lane：从 `corpus/` 准备 LightRAG 输入，并提交到一个已有的 LightRAG Server 服务。
-- `artifacts` 协议：写入顶层 `manifest.json`、lane manifest、reports、state、agent plan/summary。
-- 增量基础：扫描 corpus hash，输出 added / modified / deleted change set。
-- 完全分离：Wiki 与 LightRAG 可以独立运行、独立更新、独立部署。
+默认交付物是一个可继续开发和部署的完整平台：
 
-## Skill 拆分
+```text
+静态 Wiki + 问答页 + 图谱页 + 实体枢纽 + 查询网关 + Nginx 配置
+```
 
-Evo Wiki 现在采用主 Skill + 两个 lane 子 Skill 的结构：
+只有明确使用 `--target wiki` 时，才只生成文档站。
 
-| Skill | 职责 | 目录 |
-|---|---|---|
-| 主 Skill | 只做目标判断、lane 路由与边界说明 | `SKILL.md` |
-| Wiki 子 Skill | Wiki 写作、页面结构、HTML 样例、渲染脚本 | `skills/evo-wiki-wiki/` |
-| LightRAG 子 Skill | LightRAG 输入准备、dry-run、提交到已有服务与删除重建安全协议 | `skills/evo-wiki-lightrag/` |
+## 产品边界
 
-两个子 Skill 都有独立的 `SKILL.md`、`scripts/` 与 `examples/`。
+Evo Wiki 负责：
+
+- 从项目语料构建结构化 Wiki；
+- 接入用户已经运行的 LightRAG 服务；
+- 生成问答、图谱和实体枢纽 SPA；
+- 用查询网关约束浏览器到 LightRAG 的读取路径；
+- 自动迁移并校验本地 SQLite 状态；
+- 导出可预览、可继续二次开发的静态平台目录。
+
+Evo Wiki 不负责：
+
+- 在 CLI 内调用模型供应商 API 生成正文；
+- 安装、启动或托管 LightRAG；
+- 保存 API key、Bearer token 或审计密钥；
+- 自动删除、批量替换或重建 LightRAG 远端数据；
+- 多域 ACL、OAuth/RBAC、NFS/SMB、多主机或零停机部署。
 
 ## 安装
 
+开发安装：
+
 ```bash
-cd workspace/evo-wiki
 python3 -m venv .venv
 . .venv/bin/activate
-pip install -e .
+pip install -e '.[dev]'
 ```
 
-> Evo Wiki 不再在本进程内安装或启动 `lightrag-hku`。生成完整 platform 时必须先准备一个已运行的 LightRAG Server，并把地址写入本地配置文件 `lightrag-config.json`（从 `lightrag-config.example.json` 复制，已被 `.gitignore` 忽略）。如果用户未提供 LightRAG 地址，应先询问用户，不要猜测 localhost。若服务启用了 API key 或登录鉴权，分别设置 `LIGHTRAG_API_KEY` 或 `LIGHTRAG_BEARER_TOKEN`。
-
-## 运行数据目录
-
-为避免 `corpus/`、`artifacts/`、`project.json`、`wiki.json` 等运行数据和工具源码混在一起，Evo wiki 默认把所有项目运行数据放入当前工程的：
-
-```text
-workspace/
-```
-
-也就是说，在 `workspace/evo-wiki` 工具目录内直接运行：
+发布包安装：
 
 ```bash
-evo-wiki init
+pip install evo_wiki-1.0.1-py3-none-any.whl
 ```
 
-会创建：
-
-```text
-workspace/
-  corpus/
-  artifacts/
-  project.json
-  wiki.json
-```
-
-如果你要操作其他项目，可以显式指定：
+安装后提供两个等价入口：
 
 ```bash
-evo-wiki init --root /path/to/project-workspace
+evo-wiki --version
+evo --version
 ```
 
-## 快速开始
+## 五分钟生成一个本地平台
+
+### 1. 初始化 workspace
 
 ```bash
-cd workspace/evo-wiki
-evo-wiki init
-cp /path/to/source.md workspace/corpus/raw/
+evo-wiki init \
+  --root ./demo \
+  --profile local-platform
 ```
 
-### 默认：生成完整 platform
+profile 有三种：
 
-除非用户明确说“只生成 Wiki / 只要文档站 / 不要问答和图谱”，默认目标应是生成完整只读 Web platform：
+| profile | 用途 |
+| --- | --- |
+| `local-platform` | 默认；完整平台，本机 loopback 预览 |
+| `production-export` | 生成面向反向代理部署的完整平台 |
+| `wiki-only` | 关闭问答、图谱和实体枢纽 |
 
-```text
-Wiki 静态站 + 问答页 + 图谱页 + 实体枢纽页 + nginx 服务配置
-```
+初始化会创建配置、目录和当前版本 SQLite，但不会生成真实 Wiki 正文，也不会保存密钥。
 
-执行顺序：
-
-1. 准备 LightRAG 地址配置（必需）：
+### 2. 放入语料
 
 ```bash
-cp lightrag-config.example.json lightrag-config.json
-# 编辑 lightrag-config.json，把 base_url 改为真实 LightRAG Server，例如：
-# { "base_url": "http://172.20.105.79:9621" }
+cp /path/to/source.md ./demo/corpus/raw/
 ```
 
-`lightrag-config.json` 已被 `.gitignore` 忽略，用于保存本地服务地址和可选鉴权配置。若用户未提供 LightRAG 地址，应先向用户询问。
-
-2. 生成 Wiki 与 LightRAG lane：
-
-```bash
-evo-wiki run --lane both
-```
-
-3. 导出 platform 目录和 nginx 配置：
-
-```bash
-evo-wiki export-platform
-```
-
-输出：
+Agent 按根目录 `SKILL.md` 和 Wiki 子 Skill，把语料整理到：
 
 ```text
-workspace/artifacts/platform/
-  index.html              # Wiki
-  app/                    # 问答 / 图谱 / 实体枢纽 SPA
-  assets/shared/          # Wiki + SPA 共享主题和导航
-  status/                 # LightRAG 状态快照
-  nginx.conf              # 静态站 + LightRAG 只读代理
-  README.md               # 运行说明
-```
-
-4. 启动 nginx：
-
-```bash
-cd workspace/artifacts/platform
-nginx -p . -c nginx.conf
-```
-
-访问：
-
-```text
-http://localhost:8080/          # Wiki
-http://localhost:8080/app       # 问答
-http://localhost:8080/app#graph # 图谱
-```
-
-### 只生成 Wiki（用户明确要求时）
-
-Wiki lane 采用 `llm-wiki-demo` 式 Skill 化工作法：**Claude Code 通过自然语言操作 Markdown Wiki 源文件，Python CLI 只负责渲染、轻量 lint、报告和静态 HTML 交付**。
-
-1. 把资料放入：
-
-```text
-workspace/corpus/raw/
-```
-
-2. 让 Claude Code 执行 Skill 操作，例如：
-
-```text
-ingest workspace/corpus/raw/source.md
-compile workspace/artifacts/wiki/wiki-src/concepts/
-这个 wiki 里怎么解释 X？
-处理所有 open audit
-```
-
-Claude Code 维护：
-
-```text
-workspace/artifacts/wiki/wiki-src/
+demo/artifacts/wiki/wiki-src/
   index.md
   concepts/
   entities/
   sources/
-workspace/artifacts/wiki/audit/
-workspace/artifacts/wiki/log/
-workspace/artifacts/wiki/outputs/queries/
 ```
 
-其中：
+初始化产生的 `index.md` 是占位页。完整平台检测到 stub 时会返回
+`GENERATION_WIKI_STUB`，防止空壳平台被误当成交付物。
 
-- `index.md` 是全局入口。
-- `concepts/` 放概念页，一个概念一个文件。
-- `entities/` 放人物、工具、论文、组织等实体页。
-- `sources/` 放原文页，每页必须由「摘要」和「原文内容」组成，并保留完整原文；摘要直接附在原文页内，不再单独建摘要页；原文段落中要为已抽取概念/实体加入 `[[wikilink]]`。
-- `audit/` 是反馈队列；明确修复的问题归档到 `audit/resolved/`。
-- `log/` 记录每次 `ingest / compile / query / lint / audit` 操作。
-- `outputs/queries/` 可保存有复用价值的 Wiki 问答。
-- 页面之间用 `[[wikilink]]` 交叉引用。
-- 概念页、实体页必须严格基于语料做自然摘要，不使用模型常识编造。
-- 主要语言必须与语料保持一致；中文语料项目中，页面、提示与说明以中文为主。
+### 3. 配置平台外观和功能
 
-3. 需要 HTML 预览或交付时调用 Python 渲染：
+编辑 `demo/wiki.json`：
+
+```json
+{
+  "title": "项目知识库",
+  "description": "面向二次开发的知识平台",
+  "brand": {
+    "logo_path": null,
+    "primary_color": "#2563eb"
+  },
+  "navigation": {
+    "wiki": true,
+    "qa": true,
+    "graph": true,
+    "entity_hub": true
+  },
+  "query_defaults": {
+    "mode": "mix",
+    "top_k": 20,
+    "history_turns": 3
+  },
+  "graph_defaults": {
+    "max_depth": 2,
+    "max_nodes": 50,
+    "popular_limit": 12
+  }
+}
+```
+
+约束：
+
+- `logo_path` 必须是 workspace 内的规范相对路径；
+- `primary_color` 使用 `#RRGGBB`；
+- `query_defaults.mode` 必须是受支持的 LightRAG 查询模式；
+- `top_k` 范围为 1–100；
+- `history_turns` 范围为 0–3，默认携带最近 3 个成功展示的完整问答对；
+- `graph_defaults` 默认使用 depth 2、最多 50 节点；客户端硬上限为 200；
+- `entity_hub=true` 要求 `qa=true` 且 `graph=true`。
+
+配置会同时作用于 Wiki 和 SPA。Logo 会被复制到公共资源目录，不会引用 workspace 私有路径。
+
+### 4. 配置真实 LightRAG
+
+完整平台要求一个已经运行的 LightRAG 服务：
 
 ```bash
-evo-wiki run --lane wiki
-# 或只渲染：evo-wiki render-wiki
+cp ./demo/lightrag-config.example.json \
+  ./demo/lightrag-config.json
 ```
 
-输出：
+编辑本地文件：
+
+```json
+{
+  "mode": "service",
+  "base_url": "http://YOUR_LIGHTRAG_SERVER:9621",
+  "workspace": "evo_wiki",
+  "api_key_env": "LIGHTRAG_API_KEY",
+  "bearer_token_env": "LIGHTRAG_BEARER_TOKEN"
+}
+```
+
+`base_url` 和 `workspace` 必须明确填写。Evo Wiki 不猜测 localhost，也不会启动
+`lightrag-server`。凭据只通过环境变量注入：
+
+```bash
+export LIGHTRAG_API_KEY='...'
+export EVO_WIKI_QUERY_AUDIT_KEY='至少 16 字节的随机值'
+```
+
+若服务使用 Bearer token，则改用 `LIGHTRAG_BEARER_TOKEN`。不要把真实密钥写入配置、仓库、
+SQLite、日志或报告。
+
+可以先单独做只读服务检查：
+
+```bash
+evo-wiki doctor --root ./demo --check-service
+```
+
+### 5. 预演（dry-run）
+
+```bash
+evo-wiki generate \
+  --root ./demo \
+  --dry-run \
+  --json
+```
+
+完整预演保证：
+
+- 不写 workspace；
+- 不创建或修改 SQLite；
+- 不提交 LightRAG；
+- 不替换已有平台；
+- 只返回配置、语料、迁移、服务和导出计划。
+
+若当前语料已有 `UNKNOWN/BLOCKED` LightRAG binding，预演返回
+`status=blocked`、`GENERATION_RECONCILE_REQUIRED` 和安全计数，并列出只读 review、
+`--apply` 与重试命令。此路径使用 immutable SQLite 读取，不创建 WAL/SHM。
+
+### 6. 生成平台
+
+```bash
+evo-wiki generate \
+  --root ./demo \
+  --smoke-query "这个项目解决什么问题？" \
+  --json
+```
+
+默认 `--target platform`。执行顺序固定为：
+
+1. 只读检查配置、语料和 Wiki 正文；
+2. 在任何 Wiki staging 改写前检查当前 binding gate；已知阻断要求先执行
+   `state reconcile`；
+3. 自动将 legacy JSON 状态切换到 SQLite；
+4. 自动备份并将 SQLite schema v1–v4 升级到当前 v5；
+5. 执行 `state verify`；
+6. 渲染并检查 Wiki；
+7. 检查、提交并轮询 LightRAG；
+8. 检查查询网关；
+9. 在 staging 中构建并原子替换 `artifacts/platform/`。
+
+失败语义：
+
+- 迁移或校验失败：不调用 LightRAG；
+- Wiki 质量失败：不调用 LightRAG；
+- LightRAG 或网关失败：不替换已有平台；
+- 语料删除触发 `requires_rebuild`：停止，不自动删除或重建远端数据；
+- 当前 schema 重复生成：不重复创建迁移备份。
+
+查询接口使用 schema v2，把回答生成、证据质量和人工审核拆成独立状态：
+
+- `generation_status=succeeded`：正文立即展示，并进入最近三轮会话历史；
+- `evidence_status=grounded`：至少一条知识库证据有效且全部检查通过；
+- `evidence_status=partially_grounded`：存在有效证据，但部分引用、短问题或关键事实待核验；
+- `evidence_status=ungrounded`：首轮没有可用知识库证据，网关使用同一 LightRAG 服务的
+  `mode=bypass` 生成通用知识回答；
+- `review_status=pending`：后台待人工审核，不折叠、不隐藏正文。
+
+只有鉴权、容量、维护、超时、服务异常或最终空响应返回
+`generation_status=failed`。模型正文末尾的自由格式 References 不会被当作可信来源；可信
+来源只来自结构化 `citations`，前端将行内编号映射到“回答依据 → 片段 → Wiki 来源”证据卡。
+
+只要存在结构化引用，SPA 会在正文和证据卡显示后异步加载一个引用关联知识子图。候选 seed
+仅来自引用显式携带的实体 `graph_label`，或引用来源在 `wiki-registry.json` 中关联的实体
+`graph_label`；多个候选按当前问题关键词与对应引用片段的词项相关性排序。返回子图必须包含
+与候选 label 精确匹配的节点，否则继续尝试下一候选，全部未命中则不展示子图。该子图固定为
+1 跳、最多 24 个节点、最多尝试 3 个候选；拉图失败只隐藏子图区，不会改变回答、证据状态或
+人工审核状态。
+
+稳定报告写入：
 
 ```text
-workspace/artifacts/wiki/dist/index.html
-workspace/artifacts/wiki/dist/search-index.json
-workspace/artifacts/wiki/reports/wiki-report.json
-workspace/artifacts/wiki/reports/wiki-health.json
-workspace/artifacts/wiki/state/wiki-dependency-graph.json
+demo/artifacts/generation/report.json
 ```
 
-### 只更新 LightRAG 服务
+报告包含步骤状态、迁移前后版本、备份信息、本地/远端是否发生写入、产物路径、错误码和下一条
+预览命令；不记录密钥、问题正文或远端响应正文。
 
-先确认已有 LightRAG Server 正在运行，并把地址写入本地配置：
+### 7. 本地预览
 
 ```bash
-cp lightrag-config.example.json lightrag-config.json
-# 编辑 lightrag-config.json:
-# {
-#   "base_url": "http://172.20.105.79:9621"
-# }
-# 如服务启用了 API key：
-# export LIGHTRAG_API_KEY=...
-# 如服务使用登录后获得的 Bearer token：
-# export LIGHTRAG_BEARER_TOKEN=...
+evo-wiki serve \
+  --root ./demo \
+  --listen 127.0.0.1:8080
 ```
 
-然后提交当前语料：
-
-```bash
-evo-wiki run --lane lightrag
-```
-
-输出：
+同一个端口提供：
 
 ```text
-workspace/artifacts/lightrag/input/documents.jsonl
-workspace/artifacts/lightrag/reports/lightrag-report.json
-workspace/artifacts/lightrag/state/lightrag-import-ledger.json
-workspace/artifacts/lightrag/queries/smoke-test.json   # 仅传入 --smoke-query 时
+/                  Wiki
+/app/              问答、图谱和实体枢纽
+/api/query         受控查询接口
+/api/graphs        受控图谱接口
 ```
 
-如果只是检查哪些文档会提交到服务，可以先 dry-run：
+也可以从 CLI 调用同一条 schema v2 问答链路：
 
 ```bash
-evo-wiki run --lane lightrag --lightrag-dry-run
+evo-wiki query \
+  --root ./demo \
+  --gateway \
+  --query "这个项目解决什么问题？"
 ```
 
-### 推荐路径：默认生成 platform
+旧参数名 `--require-evidence` 仍作为兼容别名，但它不再表示“证据不足就不回答”。输出始终分别
+报告生成、回答来源、证据和审核状态。
+
+`serve` 只允许 loopback 和 `local_single_user`，并封禁 `/status/`、数据库、配置、README 和
+Nginx 文件。它是本地开发预览，不是公网服务器。
+
+## 只生成 Wiki
+
+明确不需要问答和图谱时：
 
 ```bash
-# 1. 用户提供 LightRAG Server 地址后，写入被 ignore 的本地配置
-cp lightrag-config.example.json lightrag-config.json
-# 编辑 lightrag-config.json 的 base_url
-
-# 2. 运行 Wiki + LightRAG 两条 lane
-evo-wiki run --lane both
-
-# 3. 导出完整 platform（同时产 nginx.conf）
-evo-wiki export-platform
+evo-wiki init --root ./docs-demo --profile wiki-only
+# 先由 Agent 完成 wiki-src 正文
+evo-wiki generate \
+  --root ./docs-demo \
+  --target wiki \
+  --json
 ```
 
-如果用户明确要求先审阅 Wiki、暂不做问答/图谱，则只运行：
+该模式不要求 LightRAG、查询网关或审计密钥，输出位于
+`artifacts/wiki/dist/index.html`。
 
-```bash
-evo-wiki run --lane wiki
-```
-
-注意：即使生成 platform，Wiki 与 LightRAG 两条 lane 的产物、状态、报告仍然分离。
-
-## HTML 样例
-
-完整样例已合并到：
+## 生成产物
 
 ```text
-skills/evo-wiki-wiki/examples/learnbuffett-style/
-```
-
-其中包含中文原始语料 `corpus/raw/`、Wiki 源文件 `artifacts/wiki/wiki-src/`，以及参考 [learnbuffett.com](https://learnbuffett.com/) 风格渲染出的 HTML 成品 `site/`。直接打开 `skills/evo-wiki-wiki/examples/learnbuffett-style/site/index.html` 即可查看页面样例。
-
-该样例演示：
-
-- 导航层级：入口 → 概念 → 实体 → 原文；左侧分组可折叠。
-- 原文页：由「摘要」和「原文内容」组成，并保留完整原文；原文中要插入概念/实体 `[[wikilink]]`，渲染后右侧展示这些链接。
-- 概念页 / 实体页：严格基于语料做自然摘要，不编造语料外事实。
-- 主要语言保持中文一致。
-
-## 命令
-
-| 命令 | 作用 |
-|---|---|
-| `evo-wiki init` | 初始化项目目录、默认配置和 wiki-src 占位页 |
-| `evo-wiki scan` | 扫描 corpus，输出增量 change set |
-| `evo-wiki render-wiki` | 渲染 Markdown Wiki 为静态 HTML |
-| `evo-wiki lint-wiki` | 对 wiki-src/audit/log 做健康检查，输出 `wiki-health.json` |
-| `evo-wiki prepare-lightrag` | 生成 LightRAG 输入包 |
-| `evo-wiki build-lightrag` | 调用已有 LightRAG Server API 提交输入文档 |
-| `evo-wiki run --lane wiki|lightrag|both` | 编排运行一个或两个 lane |
-| `evo-wiki export-platform` | 导出完整只读 Web 平台目录（Wiki + 问答 + 图谱 + SPA + nginx.conf）；需先成功运行 Wiki 与 LightRAG lane |
-| `evo-wiki inspect` | 查看 manifest 和报告 |
-
-## 项目结构
-
-```text
-evo-wiki/
-  src/                    # 工具代码
-  tests/                  # 测试
-  SKILL.md                # 主路由 Skill：只说明 Wiki / LightRAG 子 Skill 如何使用
-  skills/
-    evo-wiki-wiki/        # Wiki lane 子 Skill（SKILL.md / scripts / examples）
-    evo-wiki-lightrag/    # LightRAG lane 子 Skill（SKILL.md / scripts / examples）
-  README.md
-
-  workspace/              # 默认运行数据根目录，和工具代码分开
-    corpus/
-      raw/
+workspace/
+  corpus/                         原始语料
+  project.json                    运行和安全配置
+  wiki.json                       品牌、导航和查询默认值
+  lightrag-config.json            本地 LightRAG 配置，禁止提交
+  artifacts/
+    state/evo_wiki.sqlite3        唯一业务状态事实源
+    generation/report.json        脱敏生成报告
+    wiki/
+      wiki-src/                   Agent 维护的 Markdown
+      dist/                       静态 Wiki
+        wiki-registry.json        实体/图谱/source basename 公共映射
+      reports/                    lint 和渲染报告
+    lightrag/
+      input/                      从 corpus 生成的输入
+      reports/                    提交和 track 状态
+    platform/                     原子导出的最终平台
+      index.html
+      app/
       assets/
-    project.json
-    wiki.json
-    artifacts/
-      manifest.json
-      agent/
-        evo-plan.md
-        delta-plan.json
-        run-summary.md
-      wiki/
-        wiki-src/
-          index.md
-          concepts/
-          entities/
-          sources/
-        audit/
-          resolved/
-        log/
-        outputs/
-          queries/
-        dist/
-        progress.json
-        reports/wiki-report.json
-        reports/wiki-health.json
-        state/wiki-dependency-graph.json
-      lightrag/
-        input/documents.jsonl
-        reports/lightrag-report.json
-        state/lightrag-import-ledger.json
-        queries/
+      nginx.conf
 ```
 
-## Claude Code 与 Python 的分工
+Wiki 和 LightRAG 是两条独立工作流（lane）。它们都以原始语料为输入，但不共享索引、报告或运行
+基线；生成的 Wiki 不默认再次进入 LightRAG。
 
-Claude Code：
+## Agent 与 CLI 的分工
 
-- 理解用户目标，判断本次是 Wiki-only、LightRAG-only，还是 Wiki-first。
-- 按 `llm-wiki-demo` 式 Skill 操作维护 Wiki：`ingest / compile / query / lint / audit`。
-- 基于原始语料生成或更新 `workspace/artifacts/wiki/wiki-src/*.md`，其中概念页/实体页必须做基于语料的自然摘要，原文页必须在同一页保留「摘要 + 原文内容」，并在原文中为已抽取概念/实体加入 `[[wikilink]]`。
-- 维护 `index.md`、`audit/`、`log/`、`outputs/queries/`；发现不确定事实时写 audit，不用模型常识补齐。
-- 读取 `wiki-health.json` / `wiki-report.json`，只向用户解释基础健康问题、HTML 生成状态和下一步建议。
+Agent：
 
-Python：
+- 识别用户目标和交付 target；
+- 阅读语料并维护 `wiki-src`；
+- 建立概念、实体、原文和入口之间的 `[[wikilink]]`；
+- 实体有图谱别名时填写可选 `graph_label` 和 `aliases`；`graph_label` 必须唯一，实体页声明的
+  `sources` 会建立“引用文档 → graph label”公共映射；
+- 保留完整原文和用户手工编辑区；
+- 对证据不足、事实冲突和结构不确定内容创建 audit；
+- 完成正文后调用 `generate`。
 
-- 维护目录结构。
-- 扫描 corpus 和 change set。
-- 渲染 Markdown 为静态 HTML。
-- 生成搜索索引、依赖图、进度文件和报告。
-- 执行轻量健康检查：demo 风格链接/索引/audit/log 检查 + HTML 必需的原文页结构检查。
-- 准备 LightRAG 输入并调用已有 LightRAG Server API。
+CLI：
 
-## 设计边界
+- 管理目录、配置和 SQLite；
+- 扫描 corpus 和增量变化；
+- 渲染 Wiki、搜索索引和依赖图；
+- 对接现有 LightRAG HTTP API；
+- 轮询 track 并维护绑定关系；
+- 执行查询证据门禁；
+- 原子导出平台。
 
-- Wiki 不默认作为 LightRAG 入库源。
-- LightRAG 默认从 `workspace/corpus/` / normalized input 提交到已有 LightRAG 服务。
-- Wiki 与 LightRAG 不共享索引、不共享状态、不要求一起运行或一起部署。
-- Python 首版不负责 LLM 写作，内容生成由 Claude Code 完成。
+CLI 首版不直接调用模型 API，因此“只执行 `generate`”不会凭空把 stub 写成高质量 Wiki。
+
+## 高级与诊断命令
+
+普通生成使用 `generate`。以下命令保留给定向调试和运维：
+
+| 命令 | 风险 | 用途 |
+| --- | --- | --- |
+| `run --lane wiki\|lightrag\|both` | 本地/远端写入 | 单独运行工作流，不导出完整平台 |
+| `render-wiki` / `lint-wiki` | 本地写入/只读检查 | 写作过程快速检查 |
+| `prepare-lightrag` | 本地写入 | 只准备输入 |
+| `build-lightrag --dry-run` | 本地报告写入 | LightRAG 局部预演 |
+| `export-platform` | 本地写入 | 单独重导出，要求前置状态已完成 |
+| `migrate-state` | 预演只读，`--apply` 本地写入 | 诊断 legacy 切换 |
+| `state migrate-schema` | 预演只读，`--apply` 本地写入 | 诊断 schema 升级 |
+| `state verify` / `state backup` | 只读/本地写入 | 校验和备份 |
+| `state reconcile` | 默认只读 | 对账（reconcile）远端观察结果 |
+| `gateway check\|serve\|status` | 只读/运行服务 | 独立查询网关运维 |
+| `audit list\|show` | 只读 | 查看后台审核队列；`show --include-content` 显式读取受保护快照 |
+| `audit resolve` | 本地写入 | `APPROVED`/`REJECTED` 结案并删除正文快照 |
+| `alerts status\|dispatch\|retry` | 只读/远端通知 | 通知 outbox 运维 |
+
+HTTP 409 的 `state replace-*` 只支持受审查的单文档替换，不属于自动生成流程，也不支持批量替换。
+详细安全规则见 `skills/evo-wiki-operations/SKILL.md`。
+
+## Evidence Subgraph
+
+Evidence Subgraph 是随 wheel 发布的开发者运行时 Skill，不注册为普通 UI Skill。它根据显式 seed
+构造受资源预算约束的证据子图，只返回 scope 内证据：
+
+```bash
+evo-wiki query \
+  --root ./demo \
+  --skill evidence-subgraph \
+  --only-context \
+  --query "问题" \
+  --seed "实体或概念" \
+  --explain-retrieval
+```
+
+它不生成答案，不调用 LightRAG `global` 搜索，也不提供无边界 fallback。
+
+## 真实服务与 Mock 测试
+
+测试套件会启动一个进程内 Mock LightRAG，模拟 `/health`、`/openapi.json`、提交和 track 轮询，
+验证 Evo Wiki 的完整编排和失败边界。这个 Mock 不是 LightRAG 产品，也不会验证真实向量、图谱、
+模型或检索效果。
+
+真实接入成立的条件是：用户提供实际 `base_url` 和 `workspace`，只读服务检查通过，文档提交成功，
+对应 track 达到 `processed` 且产生有效 chunk。
+
+## 开发与发布
+
+运行测试：
+
+```bash
+.venv/bin/python -m pytest -q
+```
+
+构建 Python 包：
+
+```bash
+.venv/bin/python -m build
+```
+
+构建开发套件：
+
+```bash
+.venv/bin/python scripts/build_release.py \
+  --output-dir ./dist
+```
+
+发布目录：
+
+```text
+evo-wiki-1.0.1/
+  python/*.whl
+  python/*.tar.gz
+  skills/evo-wiki/
+  skills/evo-wiki-wiki/
+  skills/evo-wiki-lightrag/
+  skills/evo-wiki-operations/
+  examples/local-platform/
+  README.md
+  LICENSE
+  SHA256SUMS
+```
+
+实验目录、SQLite、生成 HTML、真实 LightRAG 配置和内部报告不会进入发布包。
+
+## 更多文档
+
+- [架构说明](docs/architecture.md)
+- [Wiki Skill](skills/evo-wiki-wiki/SKILL.md)
+- [LightRAG Skill](skills/evo-wiki-lightrag/SKILL.md)
+- [Operations Skill](skills/evo-wiki-operations/SKILL.md)
+- [Evidence Subgraph Skill](src/evo_wiki/retrieval_skills/evidence_subgraph/SKILL.md)

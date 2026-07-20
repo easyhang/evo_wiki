@@ -4,13 +4,16 @@ import html
 import json
 import re
 import shutil
+import unicodedata
 from dataclasses import dataclass, field
 from pathlib import Path
+from pathlib import PurePosixPath
 from typing import Callable
 
 from .config import EvoConfig
 from .paths import ProjectPaths
 from .spa_assets import write_spa_assets
+from .state.contracts import StateError
 from .utils import relpath, slugify, utc_now, write_json
 from .wiki_health import extract_wikilinks, lint_wiki_artifacts, parse_yaml_frontmatter
 
@@ -78,6 +81,7 @@ def update_wiki_progress(paths: ProjectPaths, progress: dict, phase: str, status
 
 
 def render_wiki(paths: ProjectPaths, config: EvoConfig) -> dict:
+    config.validate(paths.root)
     progress: dict = {
         "schema_version": 1,
         "lane": "wiki",
@@ -104,12 +108,22 @@ def render_wiki(paths: ProjectPaths, config: EvoConfig) -> dict:
         link_map = build_link_map(paths, markdown_files)
         page_index = build_page_index(paths, markdown_files)
         backlink_index = build_backlink_index(paths, markdown_files, page_index)
+        registry = build_wiki_registry(paths, markdown_files)
+        write_json(paths.wiki_dist / "wiki-registry.json", registry)
         update_wiki_progress(paths, progress, "build_link_map", "running", link_alias_count=len(link_map))
 
         pages: list[WikiPage] = []
         for index, md in enumerate(markdown_files, start=1):
             try:
-                page = render_page(paths, config, md, link_map, page_index, backlink_index)
+                page = render_page(
+                    paths,
+                    config,
+                    md,
+                    link_map,
+                    page_index,
+                    backlink_index,
+                    registry,
+                )
             except Exception as exc:
                 failed = {"source": relpath(md, paths.root), "error": str(exc)}
                 progress.setdefault("failed_pages", []).append(failed)
@@ -121,7 +135,7 @@ def render_wiki(paths: ProjectPaths, config: EvoConfig) -> dict:
             )
             update_wiki_progress(paths, progress, "render_pages", "running", rendered_pages=index, total_pages=len(markdown_files))
 
-        write_assets(paths)
+        write_assets(paths, config)
         update_wiki_progress(paths, progress, "write_assets", "running")
         write_spa_assets(paths, config)
         update_wiki_progress(paths, progress, "write_spa_assets", "running")
@@ -209,7 +223,13 @@ def build_link_map(paths: ProjectPaths, markdown_files: list[Path]) -> dict[str,
         raw = md.read_text(encoding="utf-8")
         frontmatter, body = split_frontmatter(raw)
         title = str(frontmatter.get("title") or extract_title(body) or md.stem)
-        aliases = {md.stem.lower(), slugify(md.stem), title.lower(), slugify(title)}
+        aliases = {
+            md.stem.lower(),
+            slugify(md.stem),
+            title.lower(),
+            slugify(title),
+            *frontmatter_aliases(frontmatter),
+        }
         if md.name == "index.md" and md.parent != paths.wiki_src:
             aliases.add(md.parent.name.lower())
             aliases.add(slugify(md.parent.name))
@@ -227,7 +247,13 @@ def build_page_index(paths: ProjectPaths, markdown_files: list[Path]) -> dict[st
         title = str(frontmatter.get("title") or extract_title(body) or md.stem)
         page_type = str(frontmatter.get("type") or infer_page_type(md, paths.wiki_src))
         meta = {"title": title, "type": page_type, "path": rel_html, "summary": extract_page_summary(body)}
-        aliases = {md.stem.lower(), slugify(md.stem), title.lower(), slugify(title)}
+        aliases = {
+            md.stem.lower(),
+            slugify(md.stem),
+            title.lower(),
+            slugify(title),
+            *frontmatter_aliases(frontmatter),
+        }
         if md.name == "index.md" and md.parent != paths.wiki_src:
             aliases.add(md.parent.name.lower())
             aliases.add(slugify(md.parent.name))
@@ -267,6 +293,7 @@ def render_page(
     link_map: dict[str, str],
     page_index: dict[str, dict[str, str]],
     backlink_index: dict[str, dict[str, dict[str, dict]]],
+    registry: dict[str, object],
 ) -> WikiPage:
     raw = md_path.read_text(encoding="utf-8")
     frontmatter, markdown = split_frontmatter(raw)
@@ -278,6 +305,9 @@ def render_page(
     current = rel.as_posix()
     resolver = make_link_resolver(current=current, link_map=link_map)
     body = markdown_to_html(markdown, resolver=resolver)
+    page_sources = parse_sources(frontmatter, markdown)
+    if page_type in {"concept", "entity"}:
+        body += source_basis_panel(page_sources, current, registry)
     links = sorted(set(extract_wikilinks(markdown)))
     out = paths.wiki_dist / rel
     out.parent.mkdir(parents=True, exist_ok=True)
@@ -285,7 +315,8 @@ def render_page(
     if page_type == "source":
         aside = source_related_panel(markdown, links, current, page_index)
     elif page_type == "entity":
-        aside = graph_hub_panel(md_path.stem) + backlink_related_panel(current, backlink_index)
+        graph_label = str(frontmatter.get("graph_label") or title).strip()
+        aside = graph_hub_panel(graph_label) + backlink_related_panel(current, backlink_index)
     elif page_type == "concept":
         aside = backlink_related_panel(current, backlink_index)
     else:
@@ -300,7 +331,7 @@ def render_page(
         text=text,
         links=links,
         page_type=page_type,
-        sources=parse_sources(frontmatter, markdown),
+        sources=page_sources,
         word_count=count_words(markdown),
     )
 
@@ -315,6 +346,140 @@ def split_frontmatter(markdown: str) -> tuple[dict[str, object], str]:
             parsed = parse_yaml_frontmatter(raw_fm) or {}
             return parsed, "\n".join(lines[idx + 1 :]).lstrip("\n")
     return {}, markdown
+
+
+def frontmatter_alias_values(frontmatter: dict[str, object]) -> list[str]:
+    raw = frontmatter.get("aliases")
+    values: list[str] = []
+    if isinstance(raw, list):
+        values = [str(item).strip() for item in raw]
+    elif isinstance(raw, str) and raw.strip() not in {"", "[]"}:
+        text = raw.strip()
+        if text.startswith("[") and text.endswith("]"):
+            values = [
+                item.strip().strip("\"'")
+                for item in text[1:-1].split(",")
+            ]
+        else:
+            values = [text]
+    return sorted({value for value in values if value})
+
+
+def frontmatter_aliases(frontmatter: dict[str, object]) -> set[str]:
+    return {
+        alias
+        for value in frontmatter_alias_values(frontmatter)
+        if value
+        for alias in (value.lower(), slugify(value))
+        if alias
+    }
+
+
+def public_source_basename(value: str) -> str:
+    normalized = unicodedata.normalize("NFKC", value.replace("\\", "/"))
+    return PurePosixPath(normalized).name
+
+
+def build_wiki_registry(
+    paths: ProjectPaths,
+    markdown_files: list[Path],
+) -> dict[str, object]:
+    """Build a public entity/source lookup without workspace paths."""
+    entities: list[dict[str, object]] = []
+    sources: dict[str, dict[str, object]] = {}
+    graph_labels: dict[str, str] = {}
+    source_graph_labels: dict[str, set[str]] = {}
+    for md in markdown_files:
+        raw = md.read_text(encoding="utf-8")
+        frontmatter, body = split_frontmatter(raw)
+        title = str(
+            frontmatter.get("title")
+            or extract_title(body)
+            or md.stem
+        ).strip()
+        page_type = str(
+            frontmatter.get("type")
+            or infer_page_type(md, paths.wiki_src)
+        )
+        wiki_path = (
+            md.relative_to(paths.wiki_src)
+            .with_suffix(".html")
+            .as_posix()
+        )
+        if page_type == "entity":
+            graph_label = str(
+                frontmatter.get("graph_label") or title
+            ).strip()
+            if not graph_label:
+                raise StateError(
+                    "entity graph_label must not be empty",
+                    error_code="WIKI_REGISTRY_MAPPING_INVALID",
+                )
+            normalized_label = unicodedata.normalize(
+                "NFKC",
+                graph_label,
+            ).casefold()
+            previous = graph_labels.get(normalized_label)
+            if previous is not None and previous != wiki_path:
+                raise StateError(
+                    "duplicate entity graph_label prevents a unique mapping",
+                    error_code="WIKI_REGISTRY_MAPPING_INVALID",
+                )
+            graph_labels[normalized_label] = wiki_path
+            explicit_aliases = frontmatter_alias_values(frontmatter)
+            for source in parse_sources(frontmatter, body):
+                basename = public_source_basename(source)
+                if basename:
+                    source_graph_labels.setdefault(
+                        basename.casefold(),
+                        set(),
+                    ).add(graph_label)
+            entities.append(
+                {
+                    "title": title,
+                    "graph_label": graph_label,
+                    "aliases": explicit_aliases,
+                    "wiki_path": wiki_path,
+                }
+            )
+        if page_type == "source":
+            for source in parse_sources(frontmatter, body):
+                basename = public_source_basename(source)
+                if not basename:
+                    continue
+                previous = sources.get(basename.casefold())
+                if previous is not None and previous["wiki_path"] != wiki_path:
+                    raise StateError(
+                        "source basename maps to more than one Wiki source page",
+                        error_code="WIKI_REGISTRY_MAPPING_INVALID",
+                    )
+                sources[basename.casefold()] = {
+                    "basename": basename,
+                    "title": title,
+                    "wiki_path": wiki_path,
+                }
+    for key, source in sources.items():
+        source["graph_labels"] = sorted(
+            source_graph_labels.get(key, set()),
+            key=lambda value: (
+                unicodedata.normalize("NFKC", value).casefold(),
+                value,
+            ),
+        )
+    return {
+        "schema_version": 1,
+        "entities": sorted(
+            entities,
+            key=lambda item: (
+                str(item["graph_label"]).casefold(),
+                str(item["wiki_path"]),
+            ),
+        ),
+        "sources": {
+            key: sources[key]
+            for key in sorted(sources)
+        },
+    }
 
 
 def infer_page_type(path: Path, wiki_src: Path) -> str:
@@ -456,6 +621,13 @@ def polish_source_markdown(markdown: str) -> str:
         line = re.sub(r"([\u4e00-\u9fff])\s+(\[\[)", r"\1\2", line)
         line = re.sub(r"(\]\])\s+([\u4e00-\u9fff])", r"\1\2", line)
         line = re.sub(r"(\]\])\s+(?=[，。！？；：、])", r"\1", line)
+        if re.fullmatch(r"[一二三四五六七八九十百]+、.{1,60}", line):
+            line = "### " + line
+        elif re.fullmatch(
+            r"[（(][一二三四五六七八九十百]+[）)].{1,60}",
+            line,
+        ):
+            line = "#### " + line
         if not line:
             blank_count += 1
             if blank_count <= 1:
@@ -578,6 +750,11 @@ def inline(text: str, *, resolver: Callable[[str], str]) -> str:
 
 def wikilink(target: str, label: str | None, resolver: Callable[[str], str]) -> str:
     href = resolver(target)
+    if href == "#self":
+        return (
+            '<span class="wikilink self">'
+            f"{html.escape(label or target)}</span>"
+        )
     css = "wikilink" if href != "#missing" else "wikilink missing"
     return f'<a class="{css}" href="{html.escape(href)}">{html.escape(label or target)}</a>'
 
@@ -588,6 +765,8 @@ def make_link_resolver(*, current: str, link_map: dict[str, str]) -> Callable[[s
         rel = link_map.get(key) or link_map.get(slugify(target))
         if not rel:
             return "#missing"
+        if rel == current:
+            return "#self"
         return relpath_from(current, rel)
 
     return resolve
@@ -741,6 +920,44 @@ def graph_hub_panel(slug: str) -> str:
     )
 
 
+def source_basis_panel(
+    page_sources: list[str],
+    current: str,
+    registry: dict[str, object],
+) -> str:
+    if not page_sources:
+        return ""
+    source_map = registry.get("sources")
+    if not isinstance(source_map, dict):
+        source_map = {}
+    items: list[str] = []
+    for source in page_sources:
+        basename = public_source_basename(source)
+        mapped = source_map.get(basename.casefold())
+        if isinstance(mapped, dict) and isinstance(
+            mapped.get("wiki_path"),
+            str,
+        ):
+            href = relpath_from(current, str(mapped["wiki_path"]))
+            title = str(mapped.get("title") or basename)
+            items.append(
+                '<li><a class="provenance-link" '
+                f'href="{html.escape(href)}">{html.escape(title)}</a>'
+                f'<span>{html.escape(basename)}</span></li>'
+            )
+        else:
+            items.append(
+                f"<li><span>{html.escape(basename)}</span>"
+                '<small>尚未建立来源页</small></li>'
+            )
+    return (
+        '<section class="source-basis" aria-labelledby="source-basis-title">'
+        '<h2 id="source-basis-title">来源依据</h2><ul>'
+        + "".join(items)
+        + "</ul></section>"
+    )
+
+
 
 def build_nav(paths: ProjectPaths, *, current: str) -> str:
     items = []
@@ -810,10 +1027,24 @@ def type_badge(page_type: str) -> str:
 
 
 def page_template(config: EvoConfig, title: str, nav: str, body: str, *, current: str, page_type: str, aside: str = "") -> str:
-    site_title = html.escape(config.wiki.get("title", "Evo Wiki"))
+    site_title = html.escape(str(config.wiki.get("title", "Evo Wiki")))
     prefix = asset_prefix(current)
     home_href = f"{prefix}index.html"
     meta = type_badge(page_type)
+    brand = config.wiki.get("brand") or {}
+    navigation = config.wiki.get("navigation") or {}
+    logo_path = brand.get("logo_path")
+    logo_public = (
+        "assets/shared/brand-logo" + Path(str(logo_path)).suffix.lower()
+        if logo_path
+        else None
+    )
+    logo_url = f"{prefix}{logo_public}" if logo_public else ""
+    logo_markup = (
+        f'<img class="brand-logo" src="{html.escape(logo_url)}" alt="">'
+        if logo_url
+        else '<span class="logo-icon">📚</span>'
+    )
     return f"""<!doctype html>
 <html lang="zh-CN">
 <head>
@@ -831,19 +1062,30 @@ def page_template(config: EvoConfig, title: str, nav: str, body: str, *, current
   <script defer src="{prefix}assets/shared/nav.js"></script>
   <script defer src="{prefix}assets/app.js"></script>
 </head>
-<body data-page-type="{html.escape(page_type)}" data-site-title="{site_title}">
+<body data-page-type="{html.escape(page_type)}" data-site-title="{site_title}"
+  data-logo-url="{html.escape(logo_url)}"
+  data-nav-wiki="{str(bool(navigation.get("wiki", True))).lower()}"
+  data-nav-qa="{str(bool(navigation.get("qa", True))).lower()}"
+  data-nav-graph="{str(bool(navigation.get("graph", True))).lower()}"
+  data-nav-entity="{str(bool(navigation.get("entity_hub", True))).lower()}">
   <div id="evo-topbar"></div>
-  <aside class="sidebar">
+  <button id="sidebar-toggle" class="sidebar-toggle" type="button"
+    aria-controls="wiki-sidebar" aria-expanded="false">目录</button>
+  <div id="sidebar-overlay" class="sidebar-overlay" hidden></div>
+  <aside id="wiki-sidebar" class="sidebar" aria-label="Wiki 目录">
     <div class="sidebar-header">
-      <a class="logo" href="{home_href}"><span class="logo-icon">📚</span>{site_title}</a>
+      <a class="logo" href="{home_href}">{logo_markup}{site_title}</a>
     </div>
     <div class="sidebar-search">
-      <input id="search" placeholder="搜索 Wiki..." autocomplete="off" data-search-index="{prefix}search-index.json">
-      <div id="search-results"></div>
+      <label for="search">搜索 Wiki</label>
+      <input id="search" placeholder="标题、类型或正文…" autocomplete="off"
+        role="combobox" aria-autocomplete="list" aria-controls="search-results"
+        aria-expanded="false" data-search-index="{prefix}search-index.json">
+      <div id="search-results" role="listbox" aria-live="polite"></div>
     </div>
     <nav class="sidebar-nav">{nav}</nav>
   </aside>
-  <main class="main">
+  <main id="wiki-main" class="main" tabindex="-1">
     <div class="content-shell">
       <article class="article">{meta}{body}</article>
       {aside}
@@ -854,18 +1096,33 @@ def page_template(config: EvoConfig, title: str, nav: str, body: str, *, current
 """
 
 
-def write_assets(paths: ProjectPaths) -> None:
+def write_assets(paths: ProjectPaths, config: EvoConfig) -> None:
     (paths.wiki_dist / "assets" / "style.css").write_text(STYLE, encoding="utf-8")
     (paths.wiki_dist / "assets" / "app.js").write_text(APP_JS, encoding="utf-8")
-    write_shared_assets(paths)
+    write_shared_assets(paths, config)
 
 
-def write_shared_assets(paths: ProjectPaths) -> None:
+def write_shared_assets(paths: ProjectPaths, config: EvoConfig) -> None:
     """Shared shell: design tokens + cross-app topbar. Single source for wiki + future SPA."""
+    presentation = config.validate(paths.root)
     shared = paths.wiki_dist / "assets" / "shared"
     shared.mkdir(parents=True, exist_ok=True)
-    (shared / "theme.css").write_text(SHARED_THEME, encoding="utf-8")
+    primary_color = presentation["primary_color"]
+    red, green, blue = (
+        int(primary_color[1:3], 16),
+        int(primary_color[3:5], 16),
+        int(primary_color[5:7], 16),
+    )
+    theme = (
+        SHARED_THEME.replace("{{primary_color}}", primary_color)
+        .replace("{{primary_rgb}}", f"{red},{green},{blue}")
+    )
+    (shared / "theme.css").write_text(theme, encoding="utf-8")
     (shared / "nav.js").write_text(SHARED_NAV_JS, encoding="utf-8")
+    logo_source = presentation["logo_source"]
+    logo_public_path = presentation["logo_public_path"]
+    if logo_source is not None and logo_public_path is not None:
+        shutil.copy2(logo_source, paths.wiki_dist / logo_public_path)
 
 
 def write_search_index(paths: ProjectPaths, pages: list[WikiPage]) -> None:
@@ -924,12 +1181,14 @@ body { font-family:var(--sans); color:var(--text); background:var(--bg); display
 .logo { color:var(--text); font-size:17px; font-weight:700; text-decoration:none; letter-spacing:.5px; font-family:var(--serif); display:inline-flex; align-items:center; gap:10px; }
 .logo-icon { font-size:22px; line-height:1; }
 .sidebar-search { padding:14px 12px 6px; }
+.sidebar-search label { display:block; color:var(--text2); font-size:12px; font-weight:600; margin-bottom:5px; }
 .sidebar-search input { width:100%; border:1px solid var(--border); background:var(--bg2); color:var(--text); border-radius:8px; padding:9px 12px; font-size:13px; font-family:var(--sans); }
 .sidebar-search input::placeholder { color:#999; }
 .sidebar-search input:focus { outline:none; border-color:var(--accent); box-shadow:0 0 0 3px var(--accent-glow); }
 #search-results { margin-top:6px; }
 #search-results a { display:block; color:var(--text2); text-decoration:none; padding:7px 10px; border-radius:6px; font-size:12px; }
-#search-results a:hover { background:var(--accent-glow); color:var(--accent); }
+#search-results a:hover, #search-results a.active { background:var(--accent-glow); color:var(--accent); }
+.sidebar-toggle, .sidebar-overlay { display:none; }
 .sidebar-nav { flex:1; padding:8px 0 24px; overflow-y:auto; text-align:left; }
 .sidebar-nav::-webkit-scrollbar { width:4px; }
 .sidebar-nav::-webkit-scrollbar-thumb { background:var(--border); border-radius:2px; }
@@ -1002,6 +1261,12 @@ body { font-family:var(--sans); color:var(--text); background:var(--bg); display
 .article a.wikilink { color:var(--link); text-decoration:none; border-bottom:none; background:linear-gradient(to bottom,transparent 60%,var(--accent-glow) 60%); transition:background .2s; font-weight:500; }
 .article a.wikilink:hover { background:linear-gradient(to bottom,transparent 40%,rgba(37,99,235,.18) 40%); }
 .article a.wikilink.missing { color:#aaa; text-decoration:line-through; background:none; }
+.article .wikilink.self { color:var(--text); font-weight:600; background:var(--bg2); border-radius:4px; padding:1px 4px; }
+.source-basis { margin:34px 0 8px; padding:16px 18px; border:1px solid var(--accent-border); border-radius:10px; background:var(--accent-glow); }
+.source-basis h2 { margin:0 0 10px; padding:0; border:0; font-family:var(--sans); font-size:14px; }
+.source-basis ul { margin:0; padding-left:20px; }
+.source-basis li { margin:6px 0; }
+.source-basis li span, .source-basis li small { display:block; color:var(--text2); font-size:12px; overflow-wrap:anywhere; }
 
 .article blockquote { background:var(--cream); border-left:4px solid var(--accent); padding:14px 20px; margin:16px 0; border-radius:0 8px 8px 0; font-style:italic; color:#1E3A5F; font-family:var(--serif); }
 .article code { background:var(--bg2); color:#2563EB; border-radius:5px; padding:2px 6px; font-size:.9em; }
@@ -1017,7 +1282,12 @@ body { font-family:var(--sans); color:var(--text); background:var(--bg); display
 
 @media (max-width: 980px) {
   body { display:block; padding-top:var(--topbar-h); }
-  .sidebar { position:static; width:auto; bottom:auto; top:auto; }
+  .sidebar { position:fixed; width:min(86vw, 320px); top:0; bottom:0; z-index:310; transform:translateX(-105%); transition:transform .2s ease; box-shadow:0 18px 50px rgba(15,23,42,.22); }
+  .sidebar.open { transform:translateX(0); }
+  .sidebar-toggle { display:inline-flex; position:fixed; top:7px; left:12px; z-index:260; align-items:center; justify-content:center; height:34px; padding:0 11px; border:1px solid var(--border); border-radius:8px; background:var(--bg); color:var(--text); font:600 13px var(--sans); cursor:pointer; }
+  .sidebar-overlay { display:block; position:fixed; inset:0; z-index:300; background:rgba(15,23,42,.35); }
+  .sidebar-overlay[hidden] { display:none; }
+  body.sidebar-open { overflow:hidden; }
   .main { margin-left:0; max-width:100%; padding-top:0; }
   .content-shell { display:block; }
   .article { padding:28px 22px 36px; }
@@ -1033,19 +1303,88 @@ async function initSearch(){
   const box = document.getElementById('search-results');
   if(!input || !box) return;
   let data=[];
+  let selected=-1;
+  const typeNames={concept:'概念',entity:'实体',source:'原文',index:'索引',page:'页面'};
   const indexPath = input.dataset.searchIndex || 'search-index.json';
-  const base = indexPath.replace(/search-index\.json$/, '');
+  const base = indexPath.replace(/search-index\\.json$/, '');
   try { data = await (await fetch(indexPath)).json(); } catch(e) { return; }
-  input.addEventListener('input', () => {
+  function render(){
     const q = input.value.trim().toLowerCase();
     box.innerHTML = '';
-    if(!q) return;
-    data.filter(p => (p.title + ' ' + p.type + ' ' + p.text).toLowerCase().includes(q)).slice(0,8).forEach(p => {
+    selected=-1;
+    if(!q){ input.setAttribute('aria-expanded','false'); return; }
+    const found=data.map(p => {
+      const title=String(p.title||'').toLowerCase();
+      const type=String(typeNames[p.type]||p.type||'').toLowerCase();
+      const text=String(p.text||'').toLowerCase();
+      let score=title===q?300:title.startsWith(q)?200:title.includes(q)?120:0;
+      if(type.includes(q)) score+=40;
+      if(text.includes(q)) score+=10;
+      return {p,score};
+    }).filter(x => x.score>0).sort((a,b) => b.score-a.score || String(a.p.title).localeCompare(String(b.p.title),'zh-CN')).slice(0,8);
+    found.forEach((entry,index) => {
+      const p=entry.p;
       const a = document.createElement('a');
       a.href = base + p.path;
-      a.textContent = `${p.title} · ${p.type}`;
+      a.id='search-option-'+index;
+      a.setAttribute('role','option');
+      a.setAttribute('aria-selected','false');
+      a.textContent = `${p.title} · ${typeNames[p.type]||p.type}`;
       box.appendChild(a);
     });
+    input.setAttribute('aria-expanded',found.length?'true':'false');
+    if(!found.length) box.textContent='没有匹配页面';
+  }
+  function move(delta){
+    const options=Array.from(box.querySelectorAll('[role="option"]'));
+    if(!options.length) return;
+    selected=(selected+delta+options.length)%options.length;
+    options.forEach((option,index) => {
+      const active=index===selected;
+      option.classList.toggle('active',active);
+      option.setAttribute('aria-selected',active?'true':'false');
+    });
+    input.setAttribute('aria-activedescendant',options[selected].id);
+  }
+  input.addEventListener('input', render);
+  input.addEventListener('keydown', event => {
+    if(event.key==='ArrowDown'){ event.preventDefault(); move(1); }
+    else if(event.key==='ArrowUp'){ event.preventDefault(); move(-1); }
+    else if(event.key==='Enter' && selected>=0){
+      const option=box.querySelectorAll('[role="option"]')[selected];
+      if(option){ event.preventDefault(); location.href=option.href; }
+    } else if(event.key==='Escape'){
+      box.innerHTML=''; selected=-1; input.setAttribute('aria-expanded','false');
+      input.removeAttribute('aria-activedescendant');
+    }
+  });
+}
+function initSidebar(){
+  const sidebar=document.getElementById('wiki-sidebar');
+  const toggle=document.getElementById('sidebar-toggle');
+  const overlay=document.getElementById('sidebar-overlay');
+  if(!sidebar || !toggle || !overlay) return;
+  let previousFocus=null;
+  function setOpen(open){
+    sidebar.classList.toggle('open',open);
+    document.body.classList.toggle('sidebar-open',open);
+    overlay.hidden=!open;
+    toggle.setAttribute('aria-expanded',open?'true':'false');
+    if(open){ previousFocus=document.activeElement; const target=sidebar.querySelector('a,input,button,summary'); if(target) target.focus(); }
+    else if(previousFocus && typeof previousFocus.focus==='function') previousFocus.focus();
+  }
+  toggle.addEventListener('click',() => setOpen(!sidebar.classList.contains('open')));
+  overlay.addEventListener('click',() => setOpen(false));
+  sidebar.addEventListener('click',event => { if(event.target.closest('a') && matchMedia('(max-width: 980px)').matches) setOpen(false); });
+  document.addEventListener('keydown',event => {
+    if(event.key==='Escape' && sidebar.classList.contains('open')){ event.preventDefault(); setOpen(false); }
+    if(event.key==='Tab' && sidebar.classList.contains('open')){
+      const focusable=Array.from(sidebar.querySelectorAll('a,input,button,summary,[tabindex]:not([tabindex="-1"])')).filter(node => !node.hidden);
+      if(!focusable.length) return;
+      const first=focusable[0],last=focusable[focusable.length-1];
+      if(event.shiftKey && document.activeElement===first){ event.preventDefault(); last.focus(); }
+      else if(!event.shiftKey && document.activeElement===last){ event.preventDefault(); first.focus(); }
+    }
   });
 }
 function initRelatedPanel(){
@@ -1058,6 +1397,12 @@ function initRelatedPanel(){
   });
 }
 function initEnhancements(){
+  initSidebar();
+  const activeNav=document.querySelector('.nav-link.active');
+  if(activeNav){
+    const group=activeNav.closest('details.nav-group');
+    if(group) group.open=true;
+  }
   initRelatedPanel();
   if(window.mermaid) mermaid.initialize({ startOnLoad: true, theme: 'default' });
   if(window.renderMathInElement) renderMathInElement(document.body, { delimiters: [
@@ -1081,8 +1426,8 @@ SHARED_THEME = """
   color-scheme: light;
   --bg:#FFFFFF; --bg2:#F5F6F8; --text:#111111; --text2:#555555;
   --heading:#111111; --heading2:#1E293B;
-  --accent:#2563EB; --accent-light:#3B82F6; --accent-strong:#7C3AED;
-  --accent-glow:rgba(37,99,235,.10); --accent-border:rgba(37,99,235,.25);
+  --accent:{{primary_color}}; --accent-light:{{primary_color}}; --accent-strong:{{primary_color}};
+  --accent-glow:rgba({{primary_rgb}},.10); --accent-border:rgba({{primary_rgb}},.25);
   --danger:#C92A3A;
   --sidebar-bg:#FFFFFF; --cream:#F0F4FF;
   --border:#E5E7EB; --card:#FFFFFF; --link:#2563EB;
@@ -1097,10 +1442,18 @@ SHARED_THEME = """
 #evo-topbar { position:fixed; top:0; left:0; right:0; height:var(--topbar-h); z-index:200; background:var(--bg); border-bottom:1px solid var(--border); }
 .evo-topbar-inner { max-width:1160px; margin:0 auto; height:100%; display:flex; align-items:center; justify-content:space-between; padding:0 20px; }
 .evo-topbar-brand { color:var(--text); text-decoration:none; font-family:var(--serif); font-size:15px; font-weight:700; }
+.brand-logo { width:24px; height:24px; object-fit:contain; display:inline-block; }
+.evo-topbar-brand .brand-logo { width:22px; height:22px; margin-right:8px; vertical-align:middle; }
 .evo-topbar-nav { display:flex; gap:4px; }
 .evo-topbar-link { color:var(--text2); text-decoration:none; font-size:13px; font-weight:500; padding:7px 14px; border-radius:8px; transition:all .15s; }
 .evo-topbar-link:hover { background:var(--accent-glow); color:var(--accent); }
 .evo-topbar-link.active { color:var(--accent); background:var(--accent-glow); font-weight:600; }
+@media (max-width: 980px) {
+  .evo-topbar-inner { justify-content:flex-end; padding:0 8px 0 72px; }
+  .evo-topbar-brand { display:none; }
+  .evo-topbar-nav { gap:2px; }
+  .evo-topbar-link { padding:7px 11px; }
+}
 """
 
 
@@ -1113,19 +1466,24 @@ SHARED_NAV_JS = """
   var mount = document.getElementById('evo-topbar');
   if (!mount) return;
   var siteTitle = (document.body && document.body.dataset && document.body.dataset.siteTitle) || 'Evo Wiki';
+  var data = (document.body && document.body.dataset) || {};
+  function enabled(name, fallback) {
+    var value = data[name];
+    return value == null ? fallback : value === 'true';
+  }
   var onApp = location.pathname.indexOf('/app') === 0;
   var hash = location.hash || '';
   var onGraph = onApp && (hash.indexOf('#graph') === 0 || hash.indexOf('#entity/') === 0);
-  var tabs = [
-    { key: 'wiki', label: 'Wiki', href: '/', active: !onApp },
-    { key: 'qa', label: '问答', href: '/app', active: onApp && !onGraph },
-    { key: 'graph', label: '图谱', href: '/app#graph', active: onGraph }
-  ];
+  var tabs = [];
+  if (enabled('navWiki', true)) tabs.push({ key: 'wiki', label: 'Wiki', href: '/', active: !onApp });
+  if (enabled('navQa', true)) tabs.push({ key: 'qa', label: '问答', href: '/app', active: onApp && !onGraph });
+  if (enabled('navGraph', true)) tabs.push({ key: 'graph', label: '图谱', href: '/app#graph', active: onGraph });
   var links = tabs.map(function (t) {
     var cls = 'evo-topbar-link' + (t.active ? ' active' : '');
     return '<a class="' + cls + '" href="' + t.href + '">' + t.label + '</a>';
   }).join('');
   function esc(s) { return String(s).replace(/[&<>"]/g, function (c) { return { '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;' }[c]; }); }
-  mount.innerHTML = '<div class="evo-topbar-inner"><a class="evo-topbar-brand" href="/">' + esc(siteTitle) + '</a><nav class="evo-topbar-nav">' + links + '</nav></div>';
+  var logo = data.logoUrl ? '<img class="brand-logo" src="' + esc(data.logoUrl) + '" alt="">' : '';
+  mount.innerHTML = '<div class="evo-topbar-inner"><a class="evo-topbar-brand" href="/">' + logo + esc(siteTitle) + '</a><nav class="evo-topbar-nav">' + links + '</nav></div>';
 })();
 """

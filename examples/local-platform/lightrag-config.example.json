@@ -1,0 +1,15 @@
+{
+  "mode": "service",
+  "base_url": "http://YOUR_LIGHTRAG_SERVER:9621",
+  "workspace": "evo_wiki",
+  "api_key_env": "LIGHTRAG_API_KEY",
+  "bearer_token_env": "LIGHTRAG_BEARER_TOKEN",
+  "timeout_seconds": 30,
+  "sync": {
+    "poll_interval_seconds": 2,
+    "poll_timeout_seconds": 600
+  },
+  "embedding": {
+    "batch_size": 8
+  }
+}

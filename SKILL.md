@@ -1,439 +1,199 @@
 ---
 name: evo-wiki
-summary: Evo Wiki 主 Skill：在 Wiki lane 与 LightRAG lane 之间做路由与边界约束。
 description: |
-  Evo Wiki 是面向 Claude Code 的 LLM Wiki / GraphRAG 知识平台工具。主 Skill 负责判断用户目标、选择
-  Wiki 子 Skill 或 LightRAG 子 Skill，并强调两条 lane 必须独立运行、独立状态、独立报告。具体写作、渲染、
-  LightRAG 输入准备与服务提交规则分别见 skills/evo-wiki-wiki/SKILL.md 与 skills/evo-wiki-lightrag/SKILL.md。
-  对重大决策、复杂但不清晰的问题、产品/战略/个人/创意推理，可使用内置 `/think` 通用思考框架。
+  使用 Evo Wiki 把项目语料生成面向二次开发者的知识平台。默认交付完整 platform，包括静态
+  Wiki、问答/图谱 SPA、受控查询网关配置和可预览产物；只有用户明确要求纯文档站时才选择
+  wiki target。涉及 Wiki 内容生成、LightRAG 接入、SQLite 自动迁移或平台交付时使用。
 ---
 
-# Evo Wiki 主 Skill
+# Evo Wiki
 
-## 1. 定位
+Evo Wiki 是“Skill 生成内容，CLI 构建平台”的开发工具。Agent 负责理解语料并维护 Wiki 正文；
+`evo-wiki generate` 负责迁移状态、渲染、LightRAG 同步、查询网关检查和平台导出。
 
-本文件是 **Evo Wiki 的主路由 Skill**，不再承载全部 Wiki 写作细节或 LightRAG 服务提交细节。
+## 选择交付目标
 
-当用户提出需求时，先判断目标属于哪条 lane，再进入对应子 Skill：
+| 用户目标 | 处理方式 |
+| --- | --- |
+| 未明确限制，或要求可二次开发的平台 | 默认 `platform` |
+| 明确只要文档站、不需要问答和图谱 | `--target wiki` |
+| 只调试 Wiki 内容 | 读取 `$evo-wiki-wiki` |
+| 只调试 LightRAG 入库 | 读取 `$evo-wiki-lightrag` |
+| 迁移、备份、对账或网关运维 | 读取 `$evo-wiki-operations` |
+| 只返回受限证据，不生成答案 | 使用 Evidence Subgraph 运行时 Skill |
 
-| 用户目标 | 使用子 Skill | 目录 |
-|---|---|---|
-| 生成知识平台、可部署站点、默认交付物、未明确说“只要 Wiki” | Wiki 子 Skill + LightRAG 子 Skill，最后 `export-platform` | 两者都用 |
-| 用户明确只要人读静态 Wiki、只生成文档站、不做问答/图谱 | Wiki 子 Skill | `skills/evo-wiki-wiki/SKILL.md` |
-| 接入 Agent 问答 / GraphRAG / 已有 LightRAG 服务 | LightRAG 子 Skill | `skills/evo-wiki-lightrag/SKILL.md` |
-| 先 Wiki 后问答知识库 | 先 Wiki 子 Skill，用户确认后再 LightRAG 子 Skill | 两者分阶段使用 |
-| 用户明确同时要两套产物 | 分别执行两个子 Skill；状态与报告仍保持分离 | 两者都用 |
+不要把 `run --lane both` 当作完整交付命令。它只运行两条工作流（lane），不会替代平台导出、
+自动迁移和最终验收。
 
-## 2. 核心边界
+## 默认平台流程
 
-Wiki lane 与 LightRAG lane 必须完全分离：
-
-- 不强制一起运行。
-- 不共享索引。
-- 不共享运行状态。
-- 不要求一起部署。
-- 不把模型生成的 Wiki 页面默认喂给 LightRAG。
-- 任一 lane 失败，不破坏另一条 lane 已有产物。
-- LightRAG 删除风险必须诚实报告，不得假装增量删除安全完成。
-
-## 3. 默认交付：platform 优先
-
-除非用户明确说“只生成 Wiki / 只要文档站 / 不要问答和图谱”，默认应生成完整只读 Web platform：
-
-```text
-Wiki 静态站 + 问答页 + 图谱页 + 实体枢纽页 + nginx 服务配置
-```
-
-执行规则：
-
-1. 先确认是否已有 LightRAG Server 地址。
-2. 如果用户未提供 LightRAG 地址，必须先询问用户；不要猜测 localhost，也不要静默使用默认地址。
-3. 将 LightRAG 地址写入本地 `lightrag-config.json`（从 `lightrag-config.example.json` 复制；该文件已被 `.gitignore` 忽略）。
-4. 运行 Wiki 与 LightRAG lane：`evo-wiki run --lane both`，或分步 `wiki` 后 `lightrag`。
-5. 运行 `evo-wiki export-platform`，生成 `artifacts/platform/` 与 `nginx.conf`。
-6. 只在用户明确要求“只生成 Wiki”时，才只运行 `evo-wiki run --lane wiki`，不要求 LightRAG 地址。
-
-`lightrag-config.json` 用于保存本地服务地址和可选鉴权配置；真实 credential 不应提交到仓库。若服务需要鉴权，使用 `LIGHTRAG_API_KEY` 或 `LIGHTRAG_BEARER_TOKEN` 环境变量。
-
-## 4. 子 Skill 职责
-
-### 3.1 Wiki 子 Skill
-
-使用：`skills/evo-wiki-wiki/SKILL.md`
-
-负责：
-
-- 按 `llm-wiki-demo` 式 Skill 操作维护 Wiki：`ingest / compile / query / lint / audit`。
-- 从 `workspace/corpus/` 原始语料生成可读静态 Wiki 源文件。
-- 维护 `index / concepts / entities / sources` 页面结构，以及 `audit / log / outputs/queries`。
-- 概念页与实体页必须基于语料做自然摘要，不编造；页面正文不需要单独标明来源。
-- 原文页必须由「摘要」与「原文内容」组成，并保留完整原文。
-- 生成 learnbuffett 风格的典雅书卷气 HTML 样例。
-- 写入 `artifacts/wiki/progress.json`，用于渲染断点续处理。
-- 任何修改 `wiki-src/` Markdown 页面的 Wiki 操作结束前，必须运行 `evo-wiki render-wiki` 或 `evo-wiki run --lane wiki`，生成最终 HTML。
-- 结束时运行轻量 lint：死链、孤儿页、index 收录、潜在未链接概念、audit/log 形状、audit target，以及 HTML 必需的原文页结构。
-- 运行 `evo-wiki run --lane wiki`、`render-wiki`、`lint-wiki`。
-
-自带内容：
-
-```text
-skills/evo-wiki-wiki/
-  SKILL.md
-  scripts/render-example.py
-  examples/learnbuffett-style/
-```
-
-### 3.2 LightRAG 子 Skill
-
-使用：`skills/evo-wiki-lightrag/SKILL.md`
-
-负责：
-
-- 从 `workspace/corpus/` 原始语料准备 LightRAG 输入。
-- 提交到已有 LightRAG 服务，或 dry-run 检查本次将提交的增量。
-- 维护 `artifacts/lightrag/input`、`reports`、`state`、`queries`。
-- 检测已删除语料并标记 `requires_rebuild`。
-- 运行 `evo-wiki prepare-lightrag`、`build-lightrag`、`run --lane lightrag`。
-
-自带内容：
-
-```text
-skills/evo-wiki-lightrag/
-  SKILL.md
-  scripts/dry-run-example.py
-  examples/basic/
-```
-
-## 4. 选择流程
-
-1. 先确认用户目标：人读 Wiki、Agent QA、还是两者都要。
-2. 如果用户只是要阅读、审阅、部署文档站：使用 Wiki 子 Skill。
-3. 如果用户明确要问答知识库 / GraphRAG：使用 LightRAG 子 Skill。
-4. 如果用户说“先生成 Wiki，我确认后再做问答”：先 Wiki，停止等待确认，再 LightRAG。
-5. 如果语料删除且用户要 LightRAG：先 dry-run，报告 rebuild 风险，再决定是否 full rebuild。
-
-## 5. 共同运行数据目录
-
-默认运行数据仍在：
-
-```text
-workspace/
-  corpus/
-  artifacts/
-  project.json
-  wiki.json
-```
-
-关键产物：
-
-```text
-workspace/artifacts/
-  manifest.json
-  agent/
-  wiki/
-  lightrag/
-```
-
-## 6. 常用命令
+### 1. 初始化
 
 ```bash
-# 初始化
-evo-wiki init --root /path/to/workspace
-
-# Wiki lane
-evo-wiki run --lane wiki --root /path/to/workspace
-evo-wiki lint-wiki --root /path/to/workspace
-evo-wiki render-wiki --root /path/to/workspace
-
-# LightRAG lane
-evo-wiki prepare-lightrag --root /path/to/workspace
-evo-wiki run --lane lightrag --lightrag-dry-run --root /path/to/workspace
-evo-wiki run --lane lightrag --root /path/to/workspace
-
-# 同时运行（仅当用户明确要求）
-evo-wiki run --lane both --root /path/to/workspace
+evo-wiki init \
+  --root /path/to/workspace \
+  --profile local-platform
 ```
 
-## 7. 语言与说明风格
+可选 profile：
 
-所有面向 Claude Code / Agent 的 prompt、Skill 文档、操作说明、页面模板与示例默认使用中文。命令名、代码标识符、API 名称、库名等必要场景可保留英文。
+- `local-platform`：默认；生成完整平台并仅在 loopback 本地预览；
+- `production-export`：生成带生产 Nginx 边界的产物；
+- `wiki-only`：关闭问答、图谱和实体枢纽。
 
-## 8. `/think` 通用思考框架
+初始化不会生成真实正文，也不会保存密钥。
 
-`/think` 是主 Skill 内置的结构化推理框架，用于需要认真想清楚的问题：产品决策、战略问题、人生抉择、创意工作、工程取舍，或任何值得超越随口推理的事项。它融合 YC 方法论、工程严谨性和对抗性审查模式。
+### 2. 整理语料并生成 Wiki 正文
 
-不适用于紧急情况、不适用于 trivial 决策、不适用于已经知道答案但只是在拖延行动的问题。适用于重大、复杂、反复打转、需要检验推理的问题。
-
-### 8.1 何时使用
-
-当用户出现以下场景时，可主动切换到 `/think`：
-
-- 即将做一个重大决定。
-- 问题感觉复杂，但说不清为什么。
-- 一直在同一个问题上打转。
-- 有人反对用户，用户想检验自己的推理。
-- 用户有一个“好主意”，但不确定它是否真的好。
-- 用户需要说服别人，但首先需要说服自己。
-- Evo Wiki 任务本身进入产品定位、路线选择、交付范围、架构权衡或是否值得做的判断。
-
-### 8.2 思考协议
-
-#### 步骤 1：先收集上下文
-
-在推理之前，先收集已存在的信息：
-
-- 什么已经决定了？约束、承诺、先前决策是什么？
-- 有什么证据？数据、经验、观察分别是什么？
-- 对这个领域已经了解什么？
-- 不知道什么，但希望知道什么？
-- 有没有之前的尝试或相关探索可以借鉴？
-
-输出一个 Gap Map：
-
-| 已知 | 假设 | 未知 |
-|---|---|---|
-| 有证据支撑的事实 | 未验证的信念 | 需要调查才能确认的 |
-
-大多数困惑来自混淆“已知 / 假设 / 未知”。先画出来，混乱会变清晰。
-
-#### 步骤 2：质疑前提
-
-在任何其他事情之前，先审问假设。大多数有缺陷的思考看起来都很严谨，直到发现前提错了。
-
-检验每个前提：
-
-1. 这实际上是真实的，还是只是假设它为真？
-2. 什么会让这个前提为假？
-3. 如果这个前提错了，还有什么会随之崩塌？
-4. 这个前提是所有人都认同的，还是只是回音壁？
-
-常见失败模式：
-
-- “大家都需要这个” = 类别错误，不是用户。
-- “市场在增长” = 不是愿景。
-- “兴趣证明需求” = 把注意力混同于付款。
-- “我们需要完整的平台” = 通常说明切入不够锋利。
-- “我跟人聊了，他们都喜欢” = 调查会说谎，演示是演戏。
-
-前提输出格式：
+读取 `$evo-wiki-wiki`，从 `<workspace>/corpus/` 生成或更新：
 
 ```text
-前提：
-1. [陈述] — 由 [证据/假设] 支持
-2. [陈述] — 由 [证据/假设] 支持
+artifacts/wiki/wiki-src/
+  index.md
+  concepts/
+  entities/
+  sources/
 ```
 
-对每个前提：同意 / 不同意？如果不同意，先修订再继续。
+不能把初始化产生的占位页当成完成结果。完整平台会在 Wiki 仍为 stub、语料为空或 lint 存在
+错误时失败闭锁。
 
-#### 步骤 3：找到真正的问题
+### 3. 完成个性化配置
 
-通常陈述的问题不是真正的问题。在提出解决方案之前先检验它。
+编辑 `<workspace>/wiki.json`：
 
-重新框架：
-
-- 这个问题的反面通常是什么？
-- 如果不能做 X，会怎么做？X 真的是必须的吗？
-- 这是值得解决的问题，还是为了构建某物而编造的问题？
-- 最小的、能证明概念的版本是什么？
-- 如果这是症状，根本原因是什么？
-
-“然后呢”测试：对每个问题陈述问“然后呢？”，直到碰到真正重要的事。若答不上“为什么这很重要？”，可能问题不值得花时间。
-
-#### 步骤 4：生成备选方案
-
-永远不要只提一条路径。一个选项不是选择，而是默认。
-
-每个方案结构：
-
-```text
-方案：[名称]
-摘要：1-2 句话
-为什么胜出：2-3 点
-为什么失败：2-3 点
-它假设什么：[前提依赖]
+```json
+{
+  "title": "项目知识库",
+  "description": "面向二次开发的知识平台",
+  "brand": {
+    "logo_path": null,
+    "primary_color": "#2563eb"
+  },
+  "navigation": {
+    "wiki": true,
+    "qa": true,
+    "graph": true,
+    "entity_hub": true
+  },
+  "query_defaults": {
+    "mode": "mix",
+    "top_k": 20,
+    "history_turns": 3
+  },
+  "graph_defaults": {
+    "max_depth": 2,
+    "max_nodes": 50,
+    "popular_limit": 12
+  }
+}
 ```
 
-必须有的方案类型：
+`logo_path` 必须是 workspace 内的相对路径。`entity_hub` 依赖 `qa` 和 `graph` 同时开启。
+`history_turns` 不得超过 3；所有 `generation_status=succeeded` 的完整问答对都可进入上下文，
+证据状态不阻断会话连续性。
 
-- **最小可行**：步骤最少、最快验证、最低承诺。
-- **理想架构**：最佳长期轨迹、最优雅。
-- **创意 / 横向**：不同切入角度、意想不到的路径。
+### 4. 配置真实 LightRAG
 
-决策矩阵：
+完整平台要求用户已经运行一个 LightRAG 服务。Evo Wiki 不安装、不启动也不托管 LightRAG。
 
-| | 最小可行 | 理想架构 | 创意横向 |
-|---|---|---|---|
-| 投入 | 低 | 高 | 中 |
-| 风险 | 低 | 高 | 中 |
-| 上限 | 有限 | 高 | 未知 |
-
-#### 步骤 5：用对抗性视角压测
-
-找到推理中最弱的版本并攻击它：
-
-- 什么会让这件事灾难性失败？
-- 谁会恨这个，为什么？
-- 我在回避什么不让自己去想？
-- 如果有 10 倍约束（时间 / 金钱 / 技能），会怎么做？
-- 如果成功，3 年后是什么样？失败呢？
-- 6 个月后会有什么遗憾？什么回头看会觉得蠢？
-
-第二意见获取方法：
-
-- 找一个人详细解释推理，问他们哪里不对。
-- 把问题发到社区 / 论坛 / 群聊，看反对意见。
-- 用“恶魔代言人”：故意站在反面论证，看能否成立。
-- 让 AI 扮演反对者挑战推理。
-- 关键：寻找与结论矛盾的信息，而不是支持结论的信息。
-
-分歧是信号。两条独立路径得出一致结论是强信号；分歧更好，因为它揭示真正的不确定性在哪里。
-
-#### 步骤 6：决策分类
-
-在决定之前，先分类决策类型：
-
-- **机械型**：给定证据，一个选项明显正确，没有真正权衡。→ 直接选，不要过度思考。
-- **品味型**：合理的人可能有分歧，两个选项都有优点。→ 明确权衡，下注。
-- **可逆型**：可以撤销或之后调整。→ 偏向行动，延迟成本通常高于快速修正成本。
-- **不可逆型**：无法收回。→ 放慢，获取更多证据，确保前提扎实。
-- **承诺型**：会设定先例或创造期望。→ 想清楚是否准备好被这个选择定义。
-
-#### 步骤 7：做出实际决策
-
-决策格式：
-
-```text
-决策：[你选择了什么]
-理由：[为什么，引用上面的证据和推理]
-否决：[你没有选什么以及为什么]
-可逆性：[如果错了怎么撤销]
-下一步：[这一件具体要做的事]
+```bash
+cp /path/to/workspace/lightrag-config.example.json \
+  /path/to/workspace/lightrag-config.json
 ```
 
-每次思考都必须产出一个具体后续行动：不是计划，不是策略，而是这周可以做的一件事。
+必须填写真实的 `base_url` 和 `workspace`。不要猜测 localhost。API key、Bearer token 和查询
+审计密钥只从环境变量读取：
 
-#### 步骤 8：事前验尸（Pre-mortem）
-
-在结束之前，想象已经做了但失败了：
-
-- 是什么具体导致失败？
-- 回头看，这个失败可预测吗？
-- 忽略了什么警告信号？
-- 如果失败，下一步做什么？
-
-事前验尸不是悲观，而是模式识别。失败通常有前兆，目标是更早注意到它们。
-
-### 8.3 何时停止
-
-思考不是为了无休止分析。停止信号：
-
-- 已完成步骤 1-8。
-- 前提已确认，备选方案已生成，权衡已明确。
-- 已知道“下一步”是什么。
-- 额外思考的边际收益开始递减。
-
-经验法则：如果已经思考超过 2 小时还没有决定，问自己是不是在用思考代替行动。
-
-### 8.4 模板
-
-#### 产品 / 战略决策
-
-```text
-问题：我们试图解决什么
-需求证据：谁具体想要这个，为什么
-  - 这个人叫什么？在哪里工作？
-  - 他们现在怎么解决这个问题？
-  - 这个问题让他们每周损失多少时间/金钱？
-现状：他们今天在做什么，即使做得不好
-目标用户：具体的人，不是类别
-  - 不是“企业”，是“张明，Acme 公司运营总监”
-最窄切入：最小版本，值得付费的
-  - 不是完整平台，是一个功能，一个 workflow
-前提：[假设列表，每个假设已验证/未验证]
-备选方案：[2-3 个方案，每个包含投入/风险/上限]
-决策：[做什么]
-作业：这周的一个具体行动（不是“开始做”，是“具体做什么”）
-事前验尸：可能怎么失败，警告信号是什么
+```bash
+export LIGHTRAG_API_KEY='...'
+export EVO_WIKI_QUERY_AUDIT_KEY='至少 16 字节的随机值'
 ```
 
-#### 人生 / 个人决策
+不要把凭据写入仓库、配置、报告或命令参数。
 
-```text
-我想要什么：[我渴望的具体结果，不是模糊的感觉]
-为什么想要：[底层需求，不是表面欲望]
-  - 如果这个实现了，我的生活具体怎么改变？
-我害怕什么：[诚实的恐惧，不是表面担心]
-  - 最坏的情况真的会发生吗？发生后我怎么办？
-备选方案：[其他路径，包括“什么都不做”]
-我付出的代价：[时间/精力/机会成本，不是表面价格]
-如果知道了会怎么做：[我还会选这个吗？诚实回答]
-作业：一个具体步骤
-逃生舱：如果方向错了，如何改变
+### 5. 预演并生成
+
+完成正文和配置后先运行预演（dry-run）：
+
+```bash
+evo-wiki generate \
+  --root /path/to/workspace \
+  --dry-run \
+  --json
 ```
 
-#### 创意 / 想象工作
+该预演不写 workspace，也不调用远端写接口。确认计划后执行：
 
-```text
-显而易见版本：[所有人都会做的]
-酷的版本：[让我说“哇”的，具体描述]
-约束：如果有 10 倍约束会怎样
-  - 如果时间/金钱/人力只有十分之一呢？
-惊喜：什么会让我对结果感到震惊
-  - 如果用户/观众的反应超出预期，是什么反应？
-最快路径：如何快速得到真实的东西
-  - 不是“完美版本”，是“能用的第一版”
-令人愉悦的：什么让这件事值得做
-  - 不是“因为很酷”，是“因为这个细节”
+```bash
+evo-wiki generate \
+  --root /path/to/workspace \
+  --smoke-query "用于验收的问题" \
+  --json
 ```
 
-### 8.5 决策审计追踪
+默认 `target` 是 `platform`。固定执行顺序为：
 
-对于重大决策，记录下来：
+1. 只读检查配置、语料和 Wiki 正文；
+2. 以 immutable SQLite 检查当前 binding gate；
+3. 自动将 legacy JSON 状态切换到 SQLite；
+4. 自动备份并把 SQLite schema 升级到当前版本；
+5. 执行 `state verify`；
+6. 渲染并检查 Wiki；
+7. 检查、提交并轮询 LightRAG；
+8. 检查查询网关；
+9. 原子导出 `artifacts/platform/`。
 
-```markdown
-| 日期 | 决策 | 理由 | 结果（之后） |
-|---|---|---|---|
+任一步失败都会停止后续步骤。旧平台只在新平台完整构建成功后才被替换。
+若返回 `GENERATION_RECONCILE_REQUIRED`，按结果中的 review → apply → retry 命令恢复；不得
+手工修改 binding 或 SQLite。
+
+### 6. 本地预览
+
+```bash
+evo-wiki serve \
+  --root /path/to/workspace \
+  --listen 127.0.0.1:8080
 ```
 
-定期回顾。模式会显现：后悔的决策往往有共同特征，做对的决策也是。
+它在一个本地端口提供 Wiki、问答/图谱 SPA 和 `/api/*` 查询网关。只允许
+`local_single_user` 和 loopback；生产交付使用导出的 Nginx 配置。
 
-### 8.6 核心原则
+## 纯 Wiki 分支
 
-1. **具体性是货币。** “人”不是答案。说出具体人名、具体数字、具体时间。
-2. **兴趣 ≠ 需求。** 人们说会做什么和实际做什么不同。付钱才算。
-3. **现状是竞争对手。** 如果“什么都不做”是当前方案，通常说明问题不够痛。
-4. **早期窄切优于宽泛。** 最小版本证明价值优于宏大愿景。
-5. **Boil the lake（煮沸湖泊）。** 深度思考的边际成本接近零；不要在应该 thorough 的地方偷懒。
-6. **优先考虑可逆性。** 不确定时，选更容易回退的路。
-7. **作业是必须的。** 每个值得思考的问题都值得一个后续行动。
-8. **说出权衡。** “视情况而定”不是答案；说清楚依赖什么。
-9. **错误决策的成本通常小于犹豫不决的成本。** 真正不可逆的选择除外。
-10. **事前验尸不是悲观。** 是模式识别。
+用户明确不要问答和图谱时：
 
-### 8.7 常见失败模式
+```bash
+evo-wiki init --root /path/to/workspace --profile wiki-only
+# 先由 Wiki Skill 完成正文
+evo-wiki generate \
+  --root /path/to/workspace \
+  --target wiki \
+  --json
+```
 
-- **分析瘫痪**：过度推理而不决策。设时间限制，如“2 小时后必须决定”。
-- **寻找问题的解决方案**：先想构建什么，再倒推是否有人需要。应该反过来，先找问题，再找解决方案。
-- **假设用户**：“人们会用这个” = 没有具体人会用。说具体人名。
-- **把兴趣当作需求**：等候名单、注册、“这个很有趣”不是需求；付钱、行为、没了会 panic 才是需求。
-- **过早优化**：当单个 workflow 就能证明价值时，去构建完整平台。先切 wedge。
-- **确认偏误**：寻找支持已有愿望的证据。要主动寻找反证。
-- **“好主意”陷阱**：好主意执行差仍会失败；平庸主意执行好仍会成功。主意只占结果的一小部分。
+该分支不要求 LightRAG、查询网关或审计密钥。
 
-### 8.8 不适用场景
+## 工作流边界
 
-- 决策很 trivial，时间成本大于 stakes。
-- 已经知道答案，只需要行动。
-- 危机模式：先分诊，再思考。
-- 决策已经做出，无法收回。
-- 用户在寻找认同，而不是推理。
+- Wiki 使用原始语料生成可读页面；LightRAG 也从原始语料准备输入，不默认读取生成的 Wiki。
+- 两条工作流的状态、报告和索引保持分离。
+- 语料删除触发 `requires_rebuild` 时停止完整平台生成；不得自动删除、批量替换或重建远端数据。
+- SQLite 是切换后的唯一业务状态事实源；不得手工编辑数据库或兼容 JSON。
+- `migrate-state`、`state migrate-schema`、`run` 和 `export-platform` 保留给诊断、恢复和高级运维；
+  普通交付使用 `generate`。
+- Evidence Subgraph 只做显式种子驱动的受限检索，不生成答案，也不回退到全局搜索。
+- 查询响应使用 schema v2；所有 `generation_status=succeeded` 的正文立即展示。
+- `grounded`、`partially_grounded`、`ungrounded` 只说明证据质量；后两者进入后台人工审核，
+  但不折叠或隐藏正文。
+- 只有鉴权、容量、维护、超时、服务异常或最终空响应显示生成失败。
+- 公共 `wiki-registry.json` 是图谱 label、真实实体 slug 和 source basename 的映射来源，
+  不得把 workspace 绝对路径写入公共产物。
 
-### 8.9 归属
+## 回复要求
 
-该思考框架综合了以下模式：
-
-- YC 创业方法论：强制性问题、需求现实、前提挑战。
-- 工程严谨性：双重视角、明确权衡、决策分类。
-- 对抗性审查：攻击最弱版本、事前验尸、审计追踪。
-- 循证推理：具体性、差距图、“然后呢”直到碰到重要的事。
-
+- 使用自然中文，先说明结果，再给必要命令和风险。
+- 首次出现写“工作流（lane）”“预演（dry-run）”“对账（reconcile）”；后文使用中文简称。
+- 命令名、配置键、API、状态值、错误码和库名保持英文。
+- 不把 Mock LightRAG 集成测试描述成真实服务验收。只有实际 `base_url`、`workspace` 和服务检查
+  通过，才能说明真实 LightRAG 已接入。
