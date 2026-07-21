@@ -2462,6 +2462,42 @@ class StateStore:
         finally:
             connection.close()
 
+    def rejected_query_history(
+        self,
+        *,
+        query_hmac: str,
+        answer_sha256: str,
+    ) -> dict[str, Any]:
+        """Return rejected-answer history without reading protected content."""
+        self.require_schema_version(QUERY_DELIVERY_SCHEMA_VERSION)
+        connection = self.connect(read_only=True)
+        try:
+            row = connection.execute(
+                """
+                SELECT
+                  COUNT(*) AS rejection_count,
+                  COALESCE(SUM(
+                    CASE WHEN q.answer_sha256 = ? THEN 1 ELSE 0 END
+                  ), 0) AS exact_repeat_count
+                FROM audit_item a
+                JOIN query_run q
+                  ON a.subject_type = 'query_run'
+                 AND a.subject_id = q.id
+                WHERE a.status = 'REJECTED'
+                  AND q.query_hmac = ?
+                  AND q.generation_status = 'succeeded'
+                """,
+                (answer_sha256, query_hmac),
+            ).fetchone()
+            return {
+                "previous_rejection_count": int(row["rejection_count"]),
+                "exact_rejected_answer_repeat": bool(
+                    int(row["exact_repeat_count"])
+                ),
+            }
+        finally:
+            connection.close()
+
     def query_drain_status(
         self,
         retrieval_partition_id: str,

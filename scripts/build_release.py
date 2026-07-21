@@ -70,6 +70,7 @@ def build_python_distributions(destination: Path) -> None:
                 sys.executable,
                 "-m",
                 "build",
+                "--no-isolation",
                 "--outdir",
                 str(output),
             ],
@@ -127,6 +128,15 @@ def build_release(
     try:
         copy_file(ROOT / "README.md", staging / "README.md")
         copy_file(ROOT / "LICENSE", staging / "LICENSE")
+        copy_file(ROOT / "CHANGELOG.md", staging / "CHANGELOG.md")
+        for document in (
+            "development-standard.md",
+            "upgrading-to-2.0.md",
+        ):
+            copy_file(
+                ROOT / "docs" / document,
+                staging / "docs" / document,
+            )
         copy_skill(
             ROOT,
             staging / "skills" / "evo-wiki",

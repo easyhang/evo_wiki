@@ -25,9 +25,12 @@ def test_release_builder_stages_allow_list_only(tmp_path: Path):
     )
 
     assert result.returncode == 0, result.stderr
-    release = tmp_path / "evo-wiki-1.0.1"
+    release = tmp_path / "evo-wiki-2.0.0"
     assert (release / "README.md").is_file()
     assert (release / "LICENSE").is_file()
+    assert (release / "CHANGELOG.md").is_file()
+    assert (release / "docs" / "development-standard.md").is_file()
+    assert (release / "docs" / "upgrading-to-2.0.md").is_file()
     for skill in (
         "evo-wiki",
         "evo-wiki-wiki",
@@ -63,6 +66,14 @@ def test_release_builder_stages_allow_list_only(tmp_path: Path):
         / "local-platform"
         / "wiki.example.json"
     ).is_file()
+    assert (
+        release
+        / "examples"
+        / "local-platform"
+        / "wiki-src-template"
+        / "sources"
+        / "example-source.md"
+    ).is_file()
     assert not (
         release
         / "skills"
@@ -73,7 +84,14 @@ def test_release_builder_stages_allow_list_only(tmp_path: Path):
     assert not list(release.rglob("*.sqlite3"))
     assert not list(release.rglob("lightrag-config.json"))
     assert not (release / "python").exists()
-    assert (tmp_path / "evo-wiki-1.0.1.zip").is_file()
+    released_text = "\n".join(
+        path.read_text(encoding="utf-8", errors="ignore")
+        for path in release.rglob("*")
+        if path.is_file() and path.name != "SHA256SUMS"
+    )
+    assert "韩永仁" not in released_text
+    assert "李万华" not in released_text
+    assert (tmp_path / "evo-wiki-2.0.0.zip").is_file()
 
     checksum_lines = (
         release / "SHA256SUMS"

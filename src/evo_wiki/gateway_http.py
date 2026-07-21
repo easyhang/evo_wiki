@@ -12,6 +12,11 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import urlencode
 
+from .review_service import (
+    list_review_items,
+    load_review_item,
+    resolve_review_item,
+)
 from .state.notifications import NotificationDispatcher
 from .query_gateway import GatewayQueryRequest, TrustedQueryGateway
 from .state.contracts import StateError
@@ -144,6 +149,122 @@ def create_gateway_app(
                 },
                 status_code=503,
             )
+
+    async def capabilities(_: Any) -> Any:
+        return JSONResponse(
+            {
+                "schema_version": 1,
+                "audit_center": settings.auth_mode == "local_single_user",
+            }
+        )
+
+    async def audit_list(request: Any) -> Any:
+        status = request.query_params.get("status", "OPEN")
+        if status not in {"OPEN", "RESOLVED", "REJECTED"}:
+            return JSONResponse(
+                {
+                    "status": "failed",
+                    "error_code": "QUERY_AUDIT_STATUS_INVALID",
+                },
+                status_code=400,
+            )
+        items = await asyncio.to_thread(
+            list_review_items,
+            gateway.store,
+            gateway.store.root,
+            status=status,
+            include_question=True,
+        )
+        return JSONResponse(
+            {
+                "schema_version": 1,
+                "status": "ready",
+                "items": items,
+                "error_code": None,
+            }
+        )
+
+    async def audit_detail(request: Any) -> Any:
+        try:
+            item = await asyncio.to_thread(
+                load_review_item,
+                gateway.store,
+                gateway.store.root,
+                str(request.path_params["audit_id"]),
+                include_content=True,
+                tolerate_content_error=True,
+            )
+        except StateError as exc:
+            return JSONResponse(
+                {"status": "failed", "error_code": exc.error_code},
+                status_code=_audit_http_status(exc.error_code),
+            )
+        return JSONResponse(
+            {
+                "schema_version": 1,
+                "status": "ready",
+                "item": item,
+                "error_code": None,
+            }
+        )
+
+    async def audit_resolve(request: Any) -> Any:
+        body = await request.body()
+        if len(body) > 4096:
+            return JSONResponse(
+                {
+                    "status": "failed",
+                    "error_code": "QUERY_BODY_TOO_LARGE",
+                },
+                status_code=413,
+            )
+        try:
+            parsed = json.loads(body)
+        except (UnicodeDecodeError, json.JSONDecodeError):
+            parsed = None
+        resolution = (
+            parsed.get("resolution") if isinstance(parsed, dict) else None
+        )
+        if resolution not in {"APPROVED", "REJECTED"}:
+            return JSONResponse(
+                {
+                    "status": "failed",
+                    "error_code": "QUERY_AUDIT_RESOLUTION_INVALID",
+                },
+                status_code=400,
+            )
+        identity = principal(request)
+        if identity is None:
+            return JSONResponse(
+                {
+                    "status": "failed",
+                    "error_code": "QUERY_AUTH_REQUIRED",
+                },
+                status_code=401,
+            )
+        try:
+            resolved = await asyncio.to_thread(
+                resolve_review_item,
+                gateway.store,
+                gateway.store.root,
+                gateway.project_config,
+                audit_id=str(request.path_params["audit_id"]),
+                resolution=resolution,
+                actor=identity,
+            )
+        except StateError as exc:
+            return JSONResponse(
+                {"status": "failed", "error_code": exc.error_code},
+                status_code=_audit_http_status(exc.error_code),
+            )
+        return JSONResponse(
+            {
+                "schema_version": 1,
+                "status": "resolved",
+                **resolved,
+                "error_code": None,
+            }
+        )
 
     async def private_not_found(_: Any) -> Any:
         return JSONResponse(
@@ -354,6 +475,7 @@ def create_gateway_app(
     routes = [
         Route("/internal/healthz", health, methods=["GET"]),
         Route("/internal/readyz", ready, methods=["GET"]),
+        Route("/api/capabilities", capabilities, methods=["GET"]),
         Route("/v1/query", query, methods=["POST"]),
         Route("/api/query", query, methods=["POST"]),
         Route("/v1/graphs", graph_proxy, methods=["GET"]),
@@ -369,6 +491,22 @@ def create_gateway_app(
             methods=["GET"],
         ),
     ]
+    if settings.auth_mode == "local_single_user":
+        routes.extend(
+            [
+                Route("/api/audits", audit_list, methods=["GET"]),
+                Route(
+                    "/api/audits/{audit_id}",
+                    audit_detail,
+                    methods=["GET"],
+                ),
+                Route(
+                    "/api/audits/{audit_id}/resolve",
+                    audit_resolve,
+                    methods=["POST"],
+                ),
+            ]
+        )
     if platform_dir is not None:
         resolved_platform = platform_dir.resolve()
         if not (resolved_platform / "index.html").is_file():
@@ -511,3 +649,21 @@ def _state_http_status(error_code: str) -> int:
     if error_code.startswith("QUERY_GATEWAY_CONFIG"):
         return 503
     return 502
+
+
+def _audit_http_status(error_code: str) -> int:
+    if error_code == "QUERY_AUDIT_NOT_FOUND":
+        return 404
+    if error_code in {
+        "QUERY_AUDIT_NOT_RESOLVABLE",
+        "QUERY_AUDIT_PAYLOAD_CHECKSUM_MISMATCH",
+        "QUERY_AUDIT_PAYLOAD_MISSING",
+        "QUERY_AUDIT_PAYLOAD_INVALID",
+    }:
+        return 409
+    if error_code in {
+        "QUERY_AUDIT_RESOLUTION_INVALID",
+        "QUERY_AUDIT_STATUS_INVALID",
+    }:
+        return 400
+    return 500

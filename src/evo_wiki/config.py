@@ -113,6 +113,9 @@ DEFAULT_PROJECT = {
 }
 
 DEFAULT_WIKI = {
+    # Direct EvoConfig() and existing wiki.json files retain the v1 content
+    # contract. write_defaults() opts newly initialized workspaces into v2.
+    "content_contract_version": 1,
     "title": "Evo Wiki",
     "description": "Agent-generated LLM Wiki rendered to static HTML",
     "structure": {
@@ -293,9 +296,14 @@ class EvoConfig:
                 deep_merge(DEFAULT_PROJECT, PROJECT_PROFILES[profile]),
             )
         if overwrite or not wiki_path.exists():
+            wiki_defaults = deep_merge(
+                DEFAULT_WIKI,
+                WIKI_PROFILES[profile],
+            )
+            wiki_defaults["content_contract_version"] = 2
             write_json(
                 wiki_path,
-                deep_merge(DEFAULT_WIKI, WIKI_PROFILES[profile]),
+                wiki_defaults,
             )
         if overwrite or not lightrag_example_path.exists():
             write_json(lightrag_example_path, LIGHTRAG_CONFIG_EXAMPLE)
@@ -324,6 +332,19 @@ class EvoConfig:
 
         title = self.wiki.get("title")
         description = self.wiki.get("description")
+        content_contract_version = self.wiki.get(
+            "content_contract_version",
+            1,
+        )
+        if (
+            isinstance(content_contract_version, bool)
+            or content_contract_version not in {1, 2}
+        ):
+            raise StateError(
+                "wiki.content_contract_version must be 1 or 2",
+                error_code="WIKI_CONTENT_CONTRACT_INVALID",
+                details={"content_contract_version": content_contract_version},
+            )
         if not isinstance(title, str) or not title.strip():
             raise StateError(
                 "wiki.title must be a non-empty string",
@@ -494,6 +515,7 @@ class EvoConfig:
 
         return {
             "profile": profile,
+            "content_contract_version": content_contract_version,
             "title": title.strip(),
             "description": description.strip(),
             "primary_color": primary_color.lower(),

@@ -31,6 +31,92 @@
 
 ## Current Optimization Progress
 
+- On 2026-07-21, tightened trusted-evidence delivery for local Q&A. A citation
+  now needs at least two non-generic query signals in its own excerpt; a
+  single weak overlap is discarded. Broad statutory questions additionally
+  require local statutory text, so case-only material cannot be presented as
+  a verified law citation. When no trusted citations remain, the gateway still
+  delivers a `mode=bypass` answer as `ungrounded`, clears citations, and
+  creates a pending audit item. The SPA defensively suppresses any accidental
+  ungrounded citation card/inline link and shows “本地知识库未覆盖，已进入人工审核”
+  plus “暂无可信本地依据”. Focused evidence, gateway and SPA tests passed
+  (`91 passed`); the 9-source Wiki re-rendered cleanly and the platform was
+  re-exported with JavaScript syntax checks passing. Restarting the local
+  server requires its existing `EVO_WIKI_QUERY_AUDIT_KEY`, which is not
+  available in this agent environment; no audit records were changed.
+- On 2026-07-21, completed Evo Wiki 2.0.0 as a backward-compatible product
+  contract release. New workspaces now opt into content contract v2, while
+  unversioned 1.x workspaces remain read-only-compatible without file or
+  database migration. V2 generation gates enforce one-to-one corpus/source
+  mappings, canonical source pages, index discoverability, unique basenames
+  and graph labels, and safe ambiguity warnings; health and render reports now
+  expose contract version, coverage, mapping, and ambiguity metrics. Q&A uses
+  one safe Markdown renderer across answers and audit details, trusts only
+  structured citations for source/entity Wiki links, and restores pure session
+  state without persisting HTML, failures, or audit content. Added the general
+  development standard, upgrade guide, neutral Wiki templates, CHANGELOG, and
+  updated root/Wiki Skills. All 241 tests passed; Skill validation, JavaScript
+  syntax checks, 9/9 demo-source lint/render/export, browser draft restoration,
+  and release checksums passed. Generated wheel, sdist, developer-kit ZIP, and
+  SHA256SUMS locally; nothing was published, pushed, or submitted for review.
+- On 2026-07-21, fixed front-end Q&A Markdown rendering. The safe renderer now
+  supports headings, emphasis and strikethrough, block quotes, common ordered
+  and unordered/task lists, pipe tables, horizontal rules, fenced code blocks,
+  and soft line breaks while retaining citation anchors and citation-scoped
+  Wiki entity links. Raw HTML remains escaped; Markdown images are rendered as
+  text labels and never load remote content. The focused SPA regression and
+  full test suite passed, generated bundles passed JavaScript syntax checks,
+  and workspace/ui-demo was re-rendered/exported with asset hash
+  51de4934bef6.
+- On 2026-07-21, fixed Q&A loss after following a Wiki entity/source link.
+  The main Q&A view now keeps a bounded, schema-v1 `sessionStorage`
+  snapshot of successful displayed messages, compact citations, the last
+  three conversation turns, the draft, query mode, and top-k. Returning from
+  Wiki, switching SPA tabs, or reloading reconstructs the answer through the
+  normal safe renderer; failed responses, loading state, audit details, and
+  rendered HTML are not stored. “清空” clears both the visible and saved
+  conversation. The demo was re-rendered/exported with asset hash
+  `18d363c6c921`; generated JavaScript passed `node --check`, and the
+  full suite passed (`239 passed`). An isolated browser flow verified
+  ask → source Wiki → Back → reload → clear without touching LightRAG or audit
+  records.
+- On 2026-07-21, expanded `workspace/ui-demo` from the single-case sample to
+  22 Wiki pages: nine full source pages, nine representative entity pages,
+  three existing concepts, and one index. `wiki-registry.json` now contains
+  nine unique source basename mappings and nine entity graph labels/aliases.
+  Citation cards link directly to the mapped source Wiki. Answer prose links
+  only globally unique entities covered by the current structured citations,
+  once per answer; bare anonymized names, code, existing links, URLs, citation
+  markers, and escaped HTML remain plain. Both evaluation-only corpus lines
+  are retained as explicit corpus notes rather than case conclusions.
+  Wiki lint is clean, both generated SPA bundles passed `node --check`,
+  the 9-source runtime mapping check passed, and the full suite passed
+  (`239 passed`). Desktop 1440x900 and mobile 390x844 browser acceptance
+  covered the Wiki index, a full source page, Q&A layout, audit list, and
+  independent graph controls with no horizontal overflow or audit mutation.
+  The exported SPA asset hash is `ceda3a17e0f0`.
+- On 2026-07-21, removed answer-attached knowledge subgraphs from both the
+  main Q&A view and entity preset Q&A. Answers now stop after review warnings,
+  body, and structured evidence cards; they do not issue `/api/graphs`
+  requests. The independent graph view, entity neighborhood graph, graph API,
+  public Wiki registry, and developer Evidence Subgraph Skill remain intact.
+  This supersedes the answer-mini-graph behavior recorded in earlier entries.
+  `workspace/ui-demo` was regenerated with a new asset hash; generated
+  `app.js` passed `node --check`, the focused suite passed (`97 passed`), and
+  the full suite passed (`238 passed`). Desktop and 390x844 browser acceptance
+  used a non-persisting mock answer to verify body/evidence layout without an
+  answer graph or audit mutation; the independent graph still loaded 33 nodes
+  and 56 edges, and the entity neighborhood remained available.
+- On 2026-07-21, added a local-only web audit center to the generated SPA.
+  It provides pending/approved/rejected filters, lazy protected-content detail,
+  one-click approve/reject actions, safe missing-content degradation, and
+  historical rejection/exact-answer-repeat warnings. Shared CLI/HTTP review
+  handling now deletes protected content after approval and retains it after
+  rejection; trusted-proxy mode exposes neither the audit APIs nor the tab.
+  `workspace/ui-demo` was regenerated, generated `app.js` passed
+  `node --check`, all `238` tests passed, and desktop plus 390x844 browser
+  acceptance covered the list, filters, expanded answer/evidence detail, and
+  action controls without resolving an existing audit record.
 - On 2026-07-20, positioned the completed product line as Evo Wiki 1.0.0.
   Grounded and partially grounded answers now render an asynchronous
   citation-linked mini subgraph after the answer and evidence cards.
@@ -63,8 +149,9 @@
   `artifacts/query-audit/open/<audit-id>.json` snapshot containing the
   question, displayed answer, and evidence. SQLite stores only the relative
   path and SHA-256. `audit show --include-content` explicitly reads it;
-  `audit resolve --resolution APPROVED|REJECTED` closes the item and deletes
-  the snapshot. Snapshot failure does not hide the answer and returns
+  `audit resolve --resolution APPROVED|REJECTED` closes the item. Approval
+  deletes the snapshot while rejection retains it for later comparison.
+  Snapshot failure does not hide the answer and returns
   `review_status=unavailable`.
 - The SPA has no Shadow fold or audit-gated body. It renders grounded,
   partially grounded, and ungrounded notices, makes inline citation numbers

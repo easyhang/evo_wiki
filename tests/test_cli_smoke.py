@@ -57,6 +57,39 @@ def workspace_snapshot(project: Path) -> dict[str, tuple[int, int, bytes]]:
     }
 
 
+def use_legacy_wiki_contract(project: Path) -> None:
+    wiki_path = project / "wiki.json"
+    value = json.loads(wiki_path.read_text(encoding="utf-8"))
+    value["content_contract_version"] = 1
+    wiki_path.write_text(
+        json.dumps(value, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
+
+
+def write_source_page(project: Path, source_name: str = "doc.md") -> None:
+    source = (
+        project
+        / "artifacts"
+        / "wiki"
+        / "wiki-src"
+        / "sources"
+        / f"{Path(source_name).stem}.md"
+    )
+    source.parent.mkdir(parents=True, exist_ok=True)
+    source.write_text(
+        "---\n"
+        f"title: {Path(source_name).stem} source\n"
+        "type: source\n"
+        f"sources:\n  - corpus/raw/{source_name}\n"
+        "---\n\n"
+        f"# {Path(source_name).stem} source\n\n"
+        "## 摘要\n\n测试摘要。\n\n"
+        "## 原文内容\n\n测试原文。\n",
+        encoding="utf-8",
+    )
+
+
 def test_default_root_uses_workspace_directory(tmp_path: Path):
     result = run_cli(tmp_path, "init", cwd=tmp_path)
     assert result.returncode == 0, result.stderr
@@ -66,6 +99,9 @@ def test_default_root_uses_workspace_directory(tmp_path: Path):
     assert (runtime / "artifacts" / "wiki" / "wiki-src" / "index.md").exists()
     assert (runtime / "project.json").exists()
     assert (runtime / "wiki.json").exists()
+    assert json.loads(
+        (runtime / "wiki.json").read_text(encoding="utf-8")
+    )["content_contract_version"] == 2
 
     assert not (tmp_path / "corpus").exists()
     assert not (tmp_path / "artifacts").exists()
@@ -419,9 +455,11 @@ def test_generate_platform_runs_complete_pipeline_against_mock_lightrag_protocol
         index.write_text(
             "---\ntitle: 首页\ntype: index\nsources:\n"
             "  - corpus/raw/doc.md\n---\n\n"
-            "# 首页\n\n自动生成完整问答平台。\n",
+            "# 首页\n\n自动生成完整问答平台。\n\n"
+            "- [[doc source]]\n",
             encoding="utf-8",
         )
+        write_source_page(project)
         project_json = project / "project.json"
         config = json.loads(project_json.read_text(encoding="utf-8"))
         config["lightrag"]["base_url"] = (
@@ -588,6 +626,11 @@ def test_wiki_lane_smoke(tmp_path: Path):
         "# LightRAG\n\nLightRAG is the optional GraphRAG lane.\n",
         encoding="utf-8",
     )
+    write_source_page(project, "intro.md")
+    src.write_text(
+        src.read_text(encoding="utf-8") + "\n- [[intro source]]\n",
+        encoding="utf-8",
+    )
 
     result = run_cli(tmp_path, "run", "--root", str(project), "--lane", "wiki")
     assert result.returncode == 0, result.stderr
@@ -600,6 +643,9 @@ def test_wiki_lane_smoke(tmp_path: Path):
     assert (project / "artifacts" / "wiki" / "dist" / "concepts" / "lightrag.html").exists()
     health = json.loads((project / "artifacts" / "wiki" / "reports" / "wiki-health.json").read_text(encoding="utf-8"))
     assert health["issue_count"] == 0
+    assert health["content_contract_version"] == 2
+    assert health["contract"]["source_coverage_ratio"] == 1.0
+    assert health["contract"]["source_mapping_count"] == 1
     manifest = json.loads((project / "artifacts" / "manifest.json").read_text(encoding="utf-8"))
     assert manifest["selected_lanes"] == ["wiki"]
     assert manifest["lanes"]["lightrag"]["status"] == "not_requested"
@@ -611,6 +657,7 @@ def test_wiki_lane_smoke(tmp_path: Path):
 def test_lightrag_prepare_dry_run(tmp_path: Path):
     project = tmp_path / "project"
     assert run_cli(tmp_path, "init", "--root", str(project)).returncode == 0
+    use_legacy_wiki_contract(project)
     (project / "corpus" / "raw" / "doc.md").write_text("LightRAG input text", encoding="utf-8")
 
     wiki_result = run_cli(tmp_path, "run", "--root", str(project), "--lane", "wiki")
@@ -633,6 +680,7 @@ def test_lightrag_prepare_dry_run(tmp_path: Path):
 def test_run_appends_parseable_workflow_events(tmp_path: Path):
     project = tmp_path / "project"
     assert run_cli(tmp_path, "init", "--root", str(project)).returncode == 0
+    use_legacy_wiki_contract(project)
     (project / "corpus" / "raw" / "doc.md").write_text("workflow log", encoding="utf-8")
 
     first = run_cli(tmp_path, "run", "--root", str(project), "--lane", "wiki")

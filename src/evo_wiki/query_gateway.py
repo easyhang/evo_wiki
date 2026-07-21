@@ -145,6 +145,11 @@ class GatewayCitation(StrictModel):
     excerpts: list[str]
 
 
+class GatewayReviewHistory(StrictModel):
+    previous_rejection_count: int = Field(default=0, ge=0)
+    exact_rejected_answer_repeat: bool = False
+
+
 class GatewayQueryResult(StrictModel):
     schema_version: Literal[2] = 2
     request_id: str
@@ -165,6 +170,9 @@ class GatewayQueryResult(StrictModel):
     answer: str | None = None
     citations: list[GatewayCitation] = Field(default_factory=list)
     audit_id: str | None = None
+    review_history: GatewayReviewHistory = Field(
+        default_factory=GatewayReviewHistory
+    )
     error_code: str | None = None
     context_turns_used: int = Field(default=0, ge=0, le=3)
 
@@ -578,6 +586,7 @@ class TrustedQueryGateway:
             return self._commit_delivery(
                 request_id=request_id,
                 request=request,
+                query_hmac=query_hmac,
                 answer=answer,
                 answer_origin=answer_origin,
                 evidence_status=evidence_status,
@@ -823,35 +832,28 @@ class TrustedQueryGateway:
             accepted_references.append(reference)
 
         if citations:
-            _, lexical = gate_lightrag_references(
-                query,
+            relevant_citations: list[GatewayCitation] = []
+            relevant_references: list[dict[str, Any]] = []
+            for citation, reference in zip(
+                citations,
                 accepted_references,
-            )
-            lexical_code = lexical.get("code")
-            if lexical_code == "QUERY_SIGNAL_TOO_SHORT":
-                codes.append("QUERY_SIGNAL_TOO_SHORT")
-            else:
-                relevant_citations: list[GatewayCitation] = []
-                relevant_references: list[dict[str, Any]] = []
-                for citation, reference in zip(
-                    citations,
-                    accepted_references,
-                    strict=True,
-                ):
-                    _, reference_lexical = gate_lightrag_references(
-                        query,
-                        [reference],
+                strict=True,
+            ):
+                _, reference_evidence = gate_lightrag_references(
+                    query,
+                    [reference],
+                )
+                if reference_evidence.get("status") != "passed":
+                    codes.append(
+                        _reference_evidence_code(
+                            reference_evidence.get("code")
+                        )
                     )
-                    if (
-                        reference_lexical.get("code")
-                        == "IRRELEVANT_REFERENCES"
-                    ):
-                        codes.append("QUERY_REFERENCES_IRRELEVANT")
-                        continue
-                    relevant_citations.append(citation)
-                    relevant_references.append(reference)
-                citations = relevant_citations
-                accepted_references = relevant_references
+                    continue
+                relevant_citations.append(citation)
+                relevant_references.append(reference)
+            citations = relevant_citations
+            accepted_references = relevant_references
 
         if citations:
             combined = "\n".join(
@@ -887,6 +889,7 @@ class TrustedQueryGateway:
         *,
         request_id: str,
         request: GatewayQueryRequest,
+        query_hmac: str,
         answer: str,
         answer_origin: str,
         evidence_status: str,
@@ -1015,13 +1018,18 @@ class TrustedQueryGateway:
             citation.model_dump(mode="json")
             for citation in citations
         ]
+        answer_sha256 = _sha256_text(answer)
+        review_history = self.store.rejected_query_history(
+            query_hmac=query_hmac,
+            answer_sha256=answer_sha256,
+        )
         finish_arguments = {
             "status": "ANSWERED",
             "verdict_code": str(code) if code else None,
             "error_code": None,
             "reference_count": reference_count,
             "active_reference_count": active_count,
-            "answer_sha256": _sha256_text(answer),
+            "answer_sha256": answer_sha256,
             "citation_set_sha256": (
                 _sha256_text(_canonical_json(citation_payload))
                 if citation_payload
@@ -1096,6 +1104,7 @@ class TrustedQueryGateway:
             answer=answer,
             citations=citations,
             audit_id=audit_id,
+            review_history=GatewayReviewHistory(**review_history),
             error_code=None,
             context_turns_used=context_turns_used,
         )
@@ -1123,6 +1132,19 @@ def _terminal_result(
 
 def _ordered_codes(codes: list[str]) -> list[str]:
     return list(dict.fromkeys(code for code in codes if code))
+
+
+def _reference_evidence_code(code: object) -> str:
+    """Map low-level lexical outcomes to stable human-review triggers."""
+    return {
+        "IRRELEVANT_REFERENCES": "QUERY_REFERENCES_IRRELEVANT",
+        "INSUFFICIENT_QUERY_SIGNAL_OVERLAP": (
+            "QUERY_REFERENCE_RELEVANCE_INSUFFICIENT"
+        ),
+        "QUERY_SIGNAL_TOO_SHORT": "QUERY_REFERENCE_RELEVANCE_UNVERIFIED",
+        "STATUTORY_SUPPORT_MISSING": "QUERY_LOCAL_LAW_SUPPORT_MISSING",
+        "CHUNK_CONTENT_EMPTY": "QUERY_CHUNK_CONTENT_EMPTY",
+    }.get(str(code), "QUERY_REFERENCE_RELEVANCE_UNVERIFIED")
 
 
 def _candidate_index(

@@ -43,6 +43,11 @@ workspace/artifacts/wiki/
 
 ## 2. 页面模型
 
+新建项目默认采用 `wiki.json.content_contract_version: 2`。契约 v2 要求每份 corpus 文件由唯一
+来源页声明，`sources` 使用以 `corpus/` 开头的 workspace 相对路径，且所有概念、实体和来源页
+都能从根 `index.md` 发现。现有项目缺少该字段时保持契约 v1；不要为了消除检查结果而静默修改
+用户配置。
+
 每个 Wiki 项目至少维护以下页面类型：
 
 1. `index.md`：入口和全局索引。
@@ -129,6 +134,10 @@ sources:
 `graph_label` 必须唯一，否则生成以 `WIKI_REGISTRY_MAPPING_INVALID` 失败。渲染器生成公共
 `wiki-registry.json`，把实体 title/graph label/aliases 映射到真实 Wiki slug，并把唯一的
 source basename 映射到原文页；公共注册表不得出现 workspace 绝对路径。
+
+不同目录中的 corpus 文件也不能使用相同 basename，因为 LightRAG citation 只提供稳定的来源
+文件名时无法安全区分。标题或别名属于多个实体时允许构建，但该词只报告 warning，回答正文不
+自动链接。
 
 ### 原文页
 
@@ -219,6 +228,8 @@ evo-wiki lint-wiki --root /path/to/workspace
 - audit 的必填字段、`severity`、`status`、`source` 枚举；
 - open audit 指向的目标文件是否存在；
 - 原文页是否同时包含“摘要”和“原文内容”。
+- 契约 v2 的 corpus 文件是否全部具有唯一来源页，来源路径是否规范，首页是否覆盖全部页面；
+- 来源 basename、实体 graph label 是否唯一，实体标题和别名是否存在歧义。
 
 渲染结果还应人工检查：
 

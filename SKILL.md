@@ -64,6 +64,7 @@ artifacts/wiki/wiki-src/
 
 ```json
 {
+  "content_contract_version": 2,
   "title": "项目知识库",
   "description": "面向二次开发的知识平台",
   "brand": {
@@ -92,6 +93,10 @@ artifacts/wiki/wiki-src/
 `logo_path` 必须是 workspace 内的相对路径。`entity_hub` 依赖 `qa` 和 `graph` 同时开启。
 `history_turns` 不得超过 3；所有 `generation_status=succeeded` 的完整问答对都可进入上下文，
 证据状态不阻断会话连续性。
+
+新建 workspace 使用内容契约 v2：每份 corpus 文件都必须由唯一来源页声明，来源路径必须是
+`corpus/` 下的规范相对路径，所有交付页面必须从首页发现。现有 `wiki.json` 缺少
+`content_contract_version` 时按 v1 兼容，不要自动补写或升级；只有用户明确升级后才加入字段。
 
 ### 4. 配置真实 LightRAG
 
@@ -189,6 +194,10 @@ evo-wiki generate \
 - 只有鉴权、容量、维护、超时、服务异常或最终空响应显示生成失败。
 - 公共 `wiki-registry.json` 是图谱 label、真实实体 slug 和 source basename 的映射来源，
   不得把 workspace 绝对路径写入公共产物。
+- 模型正文中的自由格式 References 不是可信来源；引用和实体链接必须由结构化 citations 与
+  registry 共同约束。registry 缺失或歧义时保留正文并关闭链接。
+- 所有回答和审核详情必须经过同一安全 Markdown 渲染器；不得执行原始 HTML 或加载 Markdown
+  远程图片，也不得持久化已渲染 HTML。
 
 ## 回复要求
 

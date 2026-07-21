@@ -2,6 +2,8 @@
 from __future__ import annotations
 
 import json
+import shutil
+import subprocess
 import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -658,13 +660,13 @@ def test_spa_shell_references_generated_assets(tmp_path: Path):
     render_wiki(paths, EvoConfig())
     app_index = (paths.wiki_dist / "app" / "index.html").read_text(encoding="utf-8")
 
-    assert 'href="./app.css"' in app_index
-    assert 'src="./app.js"' in app_index
+    assert 'href="./app.css?v=' in app_index
+    assert 'src="./app.js?v=' in app_index
     assert (paths.wiki_dist / "app" / "app.css").exists()
     assert (paths.wiki_dist / "app" / "app.js").exists()
     app_js = (paths.wiki_dist / "app" / "app.js").read_text(encoding="utf-8")
     assert "data.citations" in app_js
-    assert "未检索到知识库依据，此回答由模型通用知识生成" in app_js
+    assert "本地知识库未覆盖，已进入人工审核" in app_js
     assert "回答生成失败" in app_js
     assert 'href="../assets/app.css"' not in app_index
     assert 'src="../assets/app/app.js"' not in app_index
@@ -803,6 +805,14 @@ def test_spa_shell_contains_governed_query_controls_and_shared_style(tmp_path: P
     assert "refContent(ref.excerpts || ref.content)" in app_js
     assert "data.citations" in app_js
     assert "data.answer" in app_js
+    assert "审核中心" in app_js
+    assert "/api/capabilities" in app_js
+    assert "/api/audits?status=" in app_js
+    assert "data-audit-resolution=\"APPROVED\"" in app_js
+    assert "data-audit-resolution=\"REJECTED\"" in app_js
+    assert "previous_rejection_count" in app_js
+    assert "exact_rejected_answer_repeat" in app_js
+    assert "内容不可用" in app_js
     assert "/api/graph/label/popular" in app_js
     assert "/api/graph/label/search" in app_js
     assert "节点详情" in app_js
@@ -815,23 +825,24 @@ def test_spa_shell_contains_governed_query_controls_and_shared_style(tmp_path: P
     assert "回答断言 [" in app_js
     assert "依据片段：" in app_js
     assert "safeMarkdown" in app_js
-    assert "引用关联知识子图" in app_js
-    assert "EVIDENCE_GRAPH_MAX_DEPTH = 1" in app_js
-    assert "EVIDENCE_GRAPH_MAX_NODES = 24" in app_js
-    assert "mapped && mapped.graph_labels" in app_js
-    assert "hydrateEvidenceSubgraph" in app_js
-    assert "evidenceSubgraphSeeds(refs, question)" in app_js
-    assert "evidenceSeedScore(question, ref, value, mapped)" in app_js
-    assert "right.score - left.score" in app_js
-    assert "normalizedText(nodeLabel(node)) === normalizedSeed" in app_js
-    assert "if (!root) return false" in app_js
-    assert "mapped && mapped.title,\n        '引用文档'" not in app_js
-    assert "nodeLabel(node).toLowerCase().indexOf(normalizedSeed)" not in app_js
+    assert "legacySafeMarkdown" not in app_js
+    assert "safeMarkdown(content.answer || '', citations)" in app_js
+    assert "本回答对应的知识子图" not in app_js
+    assert "EVIDENCE_GRAPH_" not in app_js
+    assert "hydrateEvidenceSubgraph" not in app_js
+    assert "evidenceSubgraphSeeds" not in app_js
+    assert "renderEvidenceMiniGraph" not in app_js
+    assert "spa-evidence-subgraph-slot" not in app_js
+    assert "spa-evidence-graph" not in app_css
+    assert "spa-mini-graph" not in app_css
+    assert app_js.count("/api/graphs?label=") == 2
     assert "GRAPH_MAX_DEPTH = 2" in app_js
     assert "GRAPH_MAX_NODES = 50" in app_js
     assert "spa-graph-node-group" in app_js
     assert "location.hash = '#entity/'" not in app_js
     assert "min-width:720px" not in app_css
+    assert "overflow-wrap:anywhere" in app_css
+    assert "overflow-x:auto" in app_css
 
 
 def test_wiki_registry_drives_entity_and_source_links(tmp_path: Path):
@@ -895,6 +906,179 @@ def test_wiki_registry_drives_entity_and_source_links(tmp_path: Path):
     assert '<span class="wikilink self">人物甲</span>' in entity_html
     assert "<h3 id=" in source_html and "一、基本案情</h3>" in source_html
     assert "<h4 id=" in source_html and "（一）争议焦点</h4>" in source_html
+
+
+def test_spa_links_only_citation_covered_unique_entities(tmp_path: Path):
+    node = shutil.which("node")
+    if node is None:
+        pytest.skip("node is required for the generated SPA behavior check")
+
+    paths = ProjectPaths.from_root(tmp_path)
+    paths.ensure_base_dirs()
+    (paths.wiki_src / "index.md").write_text(
+        "---\ntitle: 首页\ntype: index\nsources: []\n---\n\n# 首页\n",
+        encoding="utf-8",
+    )
+    entities = (
+        (
+            "han",
+            "韩永仁",
+            "韩永仁",
+            "韩永仁案被告人",
+            "102_韩永仁故意伤害案.txt",
+        ),
+        (
+            "li",
+            "李某（故意杀人、故意伤害案）",
+            "李某",
+            "死缓附带民事诉讼案被告人李某",
+            "100_李某故意杀人、故意伤害案_转自TXT.txt",
+        ),
+    )
+    for slug, title, graph_label, alias, source in entities:
+        (paths.wiki_src / "entities" / f"{slug}.md").write_text(
+            "---\n"
+            f"title: \"{title}\"\n"
+            "type: entity\n"
+            f"graph_label: \"{graph_label}\"\n"
+            f"aliases:\n  - \"{alias}\"\n"
+            f"sources:\n  - corpus/raw/{source}\n"
+            "---\n\n"
+            f"# {title}\n",
+            encoding="utf-8",
+        )
+        (paths.wiki_src / "sources" / f"{slug}.md").write_text(
+            "---\n"
+            f"title: \"{slug} case\"\n"
+            "type: source\n"
+            f"sources:\n  - corpus/raw/{source}\n"
+            "---\n\n"
+            f"# {slug} case\n\n## 摘要\n\n摘要。\n\n"
+            "## 原文内容\n\n一、基本案情\n",
+            encoding="utf-8",
+        )
+
+    render_wiki(paths, EvoConfig())
+
+    checks = """
+registry = JSON.parse(require('fs').readFileSync(registryPath, 'utf8'));
+function assert(ok, message) { if (!ok) throw new Error(message); }
+function count(value, needle) { return value.split(needle).length - 1; }
+var hanRefs = [{marker:'1', citation_id:'han', source_label:'102_韩永仁故意伤害案.txt'}];
+var liRefs = [{marker:'1', citation_id:'li', source_label:'100_李某故意杀人、故意伤害案_转自txt.txt'}];
+var linked = safeMarkdown('韩永仁作案后等待。韩永仁随后归案。[1]', hanRefs);
+assert(count(linked, 'class="spa-wiki-entity"') === 1, 'entity must link only once');
+assert(linked.includes('href="/entities/han.html"'), 'entity must use its allowlisted Wiki path');
+assert(count(safeMarkdown('韩永仁', []), 'spa-wiki-entity') === 0, 'uncited entity must remain plain');
+assert(count(safeMarkdown('韩永仁', liRefs), 'spa-wiki-entity') === 0, 'other-case citation must not activate entity');
+assert(count(safeMarkdown('李某被判刑。', liRefs), 'spa-wiki-entity') === 0, 'bare anonymous name must remain plain');
+assert(count(safeMarkdown('李某（故意杀人、故意伤害案）涉及程序问题。', liRefs), 'spa-wiki-entity') === 1, 'qualified anonymous entity must link');
+var tick = String.fromCharCode(96);
+assert(count(safeMarkdown(tick + '韩永仁' + tick + ' 后提到韩永仁', hanRefs), 'spa-wiki-entity') === 1, 'inline code must stay protected');
+assert(safeMarkdown(tick + tick + '包含 ' + tick + ' 的代码' + tick + tick, []).includes('<code>包含 ' + tick + ' 的代码</code>'), 'multi-backtick inline code must render');
+assert(count(safeMarkdown('[韩永仁](https://example.com/韩永仁) 后提到韩永仁', hanRefs), 'spa-wiki-entity') === 1, 'existing Markdown link must stay protected');
+assert(count(safeMarkdown('<b>韩永仁</b> 后提到韩永仁', hanRefs), 'spa-wiki-entity') === 1, 'raw HTML span must stay protected');
+assert(!safeMarkdown('<script>alert(1)</script>', hanRefs).includes('<script>'), 'raw HTML must be escaped');
+var markdown = [
+  '# 一级标题',
+  '## 二级 **加粗**、*斜体*和~~删除线~~',
+  '',
+  '> 引用第一行',
+  '> 引用第二行',
+  '',
+  '- 无序项目',
+  '+ [x] 已完成项目',
+  '1) 有序项目',
+  '',
+  '| 规则 | 说明 |',
+  '| --- | :---: |',
+  '| A | 表格内容 [1] |',
+  '',
+  '---',
+  '',
+  tick + tick + tick + 'js',
+  '<script>alert(1)</script>',
+  tick + tick + tick
+].join('\\n');
+var renderedMarkdown = safeMarkdown(markdown, hanRefs);
+assert(renderedMarkdown.includes('<h1>一级标题</h1>'), 'ATX heading must render');
+assert(renderedMarkdown.includes('<strong>加粗</strong>') && renderedMarkdown.includes('<em>斜体</em>'), 'inline emphasis must render');
+assert(renderedMarkdown.includes('<del>删除线</del>'), 'strikethrough must render');
+assert(renderedMarkdown.includes('<blockquote>引用第一行<br>引用第二行</blockquote>'), 'multiline quote must render');
+assert(renderedMarkdown.includes('<ul>') && renderedMarkdown.includes('<ol>'), 'common list markers must render');
+assert(renderedMarkdown.includes('<input type="checkbox" disabled checked>'), 'task list must render as a disabled checkbox');
+assert(renderedMarkdown.includes('<table>') && renderedMarkdown.includes('<th>规则</th>'), 'pipe table must render');
+assert(renderedMarkdown.includes('<hr>'), 'horizontal rule must render');
+assert(renderedMarkdown.includes('<pre><code>&lt;script&gt;alert(1)&lt;/script&gt;</code></pre>'), 'fenced code must stay escaped');
+assert(!safeMarkdown('![不加载远程图片](https://example.com/image.png)', hanRefs).includes('<img'), 'Markdown images must not create remote image elements');
+assert(!safeMarkdown('**未闭合强调', []).includes('<strong>'), 'unclosed emphasis must remain plain text');
+assert(!safeMarkdown('[危险](javascript:alert(1))', []).includes('href='), 'unsafe Markdown protocols must not create links');
+assert(!safeMarkdown('正文\\n\\n### References\\n\\n- [1] 模型自报来源', hanRefs).includes('模型自报来源'), 'free-form model references must be removed');
+assert(renderRefs(liRefs).includes('href="/sources/li.html"'), 'citation card must use case-insensitive source mapping');
+var ungroundedHtml = resultHtml({generation_status:'succeeded', answer:'模型回答 [1]', evidence_status:'ungrounded', review_status:'pending', citations:hanRefs});
+assert(ungroundedHtml.includes('本地知识库未覆盖，已进入人工审核'), 'ungrounded answers must state that review is pending');
+assert(ungroundedHtml.includes('暂无可信本地依据'), 'ungrounded answers must state that there is no trusted local evidence');
+assert(!ungroundedHtml.includes('回答断言 [1]'), 'ungrounded answers must not render evidence cards');
+assert(!ungroundedHtml.includes('class="spa-cite"'), 'ungrounded answers must not render inline trusted citations');
+registry.sources['unsafe.txt'] = {title:'不安全来源', wiki_path:'../secret.html', graph_labels:[]};
+assert(!renderRefs([{marker:'2', citation_id:'unsafe', source_label:'unsafe.txt'}]).includes('href='), 'unsafe source paths must produce non-clickable evidence');
+delete registry.sources['unsafe.txt'];
+registry.entities.push({title:'其他实体', graph_label:'OTHER', aliases:['韩永仁'], wiki_path:'entities/other.html'});
+assert(count(safeMarkdown('韩永仁', hanRefs), 'spa-wiki-entity') === 0, 'globally ambiguous term must remain plain');
+registry.entities.pop();
+qaMessages = [
+  {role:'user', content:'韩永仁为什么构成自首？'},
+  {role:'assistant', data:compactResultForSession({
+    generation_status:'succeeded',
+    answer:'韩永仁在现场等待。[1]',
+    evidence_status:'grounded',
+    citations:hanRefs
+  })}
+];
+chatHistory = [
+  {role:'user', content:'韩永仁为什么构成自首？'},
+  {role:'assistant', content:'韩永仁在现场等待。[1]'}
+];
+qaDraft = '继续追问';
+qaMode = 'local';
+qaTopK = 12;
+persistQaSession();
+qaMessages = []; chatHistory = []; qaDraft = ''; qaMode = 'mix'; qaTopK = 20; qaSessionLoaded = false;
+restoreQaSession();
+assert(qaMessages.length === 2, 'displayed messages must restore from session storage');
+assert(chatHistory.length === 2, 'conversation history must restore from session storage');
+assert(qaDraft === '继续追问' && qaMode === 'local' && qaTopK === 12, 'draft and controls must restore');
+assert(compactResultForSession({generation_status:'failed', answer:'x'}) === null, 'failed result must not persist');
+"""
+    app_path = paths.wiki_dist / "app" / "app.js"
+    registry_path = paths.wiki_dist / "wiki-registry.json"
+    script = f"""
+const fs = require('fs');
+let code = fs.readFileSync({json.dumps(str(app_path))}, 'utf8');
+const registryPath = {json.dumps(str(registry_path))};
+const bootstrap = "window.addEventListener('hashchange', route); window.addEventListener('load', async function () {{ await Promise.all([loadRegistry(), loadCapabilities()]); route(); }});";
+if (!code.includes(bootstrap)) throw new Error('SPA bootstrap marker not found');
+code = code.replace(bootstrap, {json.dumps(checks)});
+global.document = {{getElementById() {{ return {{}}; }}, body:{{dataset:{{}}}}}};
+const sessionValues = {{}};
+global.window = {{
+  addEventListener() {{}},
+  sessionStorage:{{
+    getItem(key) {{ return Object.prototype.hasOwnProperty.call(sessionValues, key) ? sessionValues[key] : null; }},
+    setItem(key, value) {{ sessionValues[key] = String(value); }},
+    removeItem(key) {{ delete sessionValues[key]; }}
+  }}
+}};
+global.location = {{hash:''}};
+eval(code);
+"""
+    completed = subprocess.run(
+        [node, "-e", script],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    assert completed.returncode == 0, completed.stderr
 
 
 def test_duplicate_entity_graph_label_blocks_registry_generation(
@@ -1017,7 +1201,8 @@ def test_wiki_and_spa_apply_validated_presentation_configuration(
     assert 'data-nav-graph="false"' in spa_html
     assert "面向二次开发的知识平台" in spa_html
     assert "value=\"7\"" in spa_js
-    assert "value = 'local'" in spa_js
+    assert "var qaMode = 'local'" in spa_js
+    assert "restoreQaSession()" in spa_js
     assert "HISTORY_TURNS = 2" in spa_js
     assert "GRAPH_MAX_DEPTH = 1" in spa_js
     assert "GRAPH_MAX_NODES = 30" in spa_js
@@ -1073,6 +1258,112 @@ def test_presentation_configuration_rejects_invalid_dependencies_and_paths(
     with pytest.raises(StateError) as graph_error:
         invalid_graph.validate(tmp_path)
     assert graph_error.value.error_code == "STATE_CONFIG_INVALID"
+
+
+def test_content_contract_v2_is_opt_in_for_existing_workspaces(
+    tmp_path: Path,
+):
+    new_root = tmp_path / "new"
+    EvoConfig.write_defaults(new_root)
+    new_wiki = json.loads(
+        (new_root / "wiki.json").read_text(encoding="utf-8")
+    )
+    assert new_wiki["content_contract_version"] == 2
+    assert EvoConfig.load(new_root).validate(new_root)[
+        "content_contract_version"
+    ] == 2
+
+    legacy_root = tmp_path / "legacy"
+    legacy_root.mkdir()
+    legacy_wiki = {
+        "title": "旧 Wiki",
+        "description": "兼容项目",
+    }
+    write_json(legacy_root / "wiki.json", legacy_wiki)
+    before = (legacy_root / "wiki.json").read_bytes()
+    assert EvoConfig.load(legacy_root).validate(legacy_root)[
+        "content_contract_version"
+    ] == 1
+    assert (legacy_root / "wiki.json").read_bytes() == before
+
+    invalid = EvoConfig()
+    invalid.wiki["content_contract_version"] = 3
+    with pytest.raises(StateError) as caught:
+        invalid.validate(tmp_path)
+    assert caught.value.error_code == "WIKI_CONTENT_CONTRACT_INVALID"
+
+
+def test_v2_content_contract_reports_coverage_and_ambiguity(
+    tmp_path: Path,
+):
+    paths = ProjectPaths.from_root(tmp_path)
+    paths.ensure_base_dirs()
+    make_file(tmp_path, "corpus/raw/a.txt", "A")
+    make_file(tmp_path, "corpus/raw/b.txt", "B")
+    make_file(
+        paths.wiki_src,
+        "index.md",
+        "# 首页\n\n- [[来源 A]]\n- [[额外来源]]\n"
+        "- [[实体甲]]\n- [[实体乙]]\n",
+    )
+    make_file(
+        paths.wiki_src,
+        "sources/a.md",
+        "---\ntitle: 来源 A\ntype: source\nsources:\n"
+        "  - corpus/raw/a.txt\n---\n\n# 来源 A\n\n"
+        "## 摘要\n\nA。\n\n## 原文内容\n\nA\n",
+    )
+    make_file(
+        paths.wiki_src,
+        "sources/extra.md",
+        "---\ntitle: 额外来源\ntype: source\nsources:\n"
+        "  - ../ghost.txt\n---\n\n# 额外来源\n\n"
+        "## 摘要\n\n额外。\n\n## 原文内容\n\n额外。\n",
+    )
+    for slug, title, label in (
+        ("a", "实体甲", "ENTITY_A"),
+        ("b", "实体乙", "ENTITY_B"),
+    ):
+        make_file(
+            paths.wiki_src,
+            f"entities/{slug}.md",
+            "---\n"
+            f"title: {title}\ntype: entity\ngraph_label: {label}\n"
+            "aliases:\n  - 共同别名\nsources:\n"
+            "  - corpus/raw/a.txt\n---\n\n"
+            f"# {title}\n",
+        )
+
+    corpus_paths = ["corpus/raw/a.txt", "corpus/raw/b.txt"]
+    health = lint_wiki_artifacts(
+        paths.root,
+        paths.wiki_src,
+        paths.wiki_audit,
+        paths.wiki_log,
+        content_contract_version=2,
+        corpus_paths=corpus_paths,
+    )
+    codes = {issue["code"] for issue in health["issues"]}
+    assert "corpus_source_unmapped" in codes
+    assert "source_frontmatter_path" in codes
+    assert "source_mapping_without_corpus" in codes
+    assert "ambiguous_entity_term" in codes
+    assert health["contract"]["mapped_corpus_file_count"] == 1
+    assert health["contract"]["source_coverage_ratio"] == 0.5
+    assert health["contract"]["entity_mapping_count"] == 2
+    assert health["contract"]["ambiguous_entity_term_count"] == 1
+
+    legacy = lint_wiki_artifacts(
+        paths.root,
+        paths.wiki_src,
+        paths.wiki_audit,
+        paths.wiki_log,
+        content_contract_version=1,
+        corpus_paths=corpus_paths,
+    )
+    legacy_codes = {issue["code"] for issue in legacy["issues"]}
+    assert "corpus_source_unmapped" not in legacy_codes
+    assert "ambiguous_entity_term" not in legacy_codes
 
 
 def test_lint_is_demo_style_plus_html_source_structure(tmp_path: Path):

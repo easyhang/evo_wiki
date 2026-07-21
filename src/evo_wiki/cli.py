@@ -31,9 +31,10 @@ from .state.notifications import (
 )
 from .paths import ProjectPaths
 from .platform_export import export_platform
-from .query_audit import (
-    delete_query_audit_payload,
-    read_query_audit_payload,
+from .review_service import (
+    list_review_items,
+    load_review_item,
+    resolve_review_item,
 )
 from .query_gateway import GatewayQueryRequest, TrustedQueryGateway
 from .retrieval_skills.evidence_subgraph import (
@@ -858,9 +859,21 @@ def cmd_render_wiki(args: argparse.Namespace) -> int:
 
 
 def cmd_lint_wiki(args: argparse.Namespace) -> int:
-    paths, _ = load(args.root)
+    paths, config = load(args.root)
     paths.ensure_base_dirs()
-    report = lint_wiki_artifacts(paths.root, paths.wiki_src, paths.wiki_audit, paths.wiki_log)
+    presentation = config.validate(paths.root)
+    report = lint_wiki_artifacts(
+        paths.root,
+        paths.wiki_src,
+        paths.wiki_audit,
+        paths.wiki_log,
+        content_contract_version=presentation[
+            "content_contract_version"
+        ],
+        corpus_paths=[
+            item.path for item in scan_corpus(paths.root, paths.corpus)
+        ],
+    )
     write_json(paths.wiki_reports / "wiki-health.json", report)
     print(json.dumps(report, ensure_ascii=False, indent=2))
     has_error = any(issue.get("severity") == "error" for issue in report.get("issues", []))
@@ -1509,11 +1522,7 @@ def cmd_alerts_retry(args: argparse.Namespace) -> int:
 def cmd_audit_list(args: argparse.Namespace) -> int:
     paths, config = load(args.root)
     store = active_sqlite_store(paths, config)
-    items = store.list_audit_items(status=args.status)
-    for item in items:
-        item["review_status"] = _audit_review_status(
-            str(item["status"])
-        )
+    items = list_review_items(store, paths.root, status=args.status)
     result = {
         "schema_version": 1,
         "status": "ready",
@@ -1541,13 +1550,12 @@ def cmd_audit_list(args: argparse.Namespace) -> int:
 def cmd_audit_show(args: argparse.Namespace) -> int:
     paths, config = load(args.root)
     store = active_sqlite_store(paths, config)
-    item = store.audit_item(args.audit_id)
-    item["review_status"] = _audit_review_status(str(item["status"]))
-    if args.include_content:
-        item["content"] = read_query_audit_payload(
-            paths.root,
-            item["evidence"],
-        )
+    item = load_review_item(
+        store,
+        paths.root,
+        args.audit_id,
+        include_content=args.include_content,
+    )
     result = {
         "schema_version": 1,
         "status": "ready",
@@ -1578,56 +1586,24 @@ def cmd_audit_resolve(args: argparse.Namespace) -> int:
         )
     paths, config = load(args.root)
     store = active_sqlite_store(paths, config)
-    existing = store.audit_item(args.audit_id)
-    if existing["evidence"].get("payload_path"):
-        # Validate the protected snapshot before committing the review fact so
-        # a missing or tampered file cannot leave a silently retained payload.
-        read_query_audit_payload(paths.root, existing["evidence"])
-    stored_resolution = (
-        "RESOLVED" if args.resolution == "APPROVED" else args.resolution
-    )
-    settings = notification_settings(config.project)
-    notification = (
-        build_notification(
-            root=paths.root,
-            event_type="AUDIT_RESOLVED",
-            severity=str(existing["severity"]),
-            subject_type="audit_item",
-            subject_id=args.audit_id,
-            dedupe_key=(
-                f"AUDIT_RESOLVED:{args.audit_id}:{args.resolution}"
-            ),
-            security_domain=str(
-                (config.project.get("security") or {}).get(
-                    "default_domain",
-                    "default",
-                )
-            ),
-            state=stored_resolution,
-            max_attempts=settings.max_attempts,
-        )
-        if should_notify(settings, str(existing["severity"]))
-        else None
-    )
-    item = store.resolve_audit_item(
+    resolved = resolve_review_item(
+        store,
+        paths.root,
+        config.project,
         audit_id=args.audit_id,
         actor=f"{getpass.getuser()}@{socket.gethostname()}",
-        resolution=stored_resolution,
-        notification=notification,
+        resolution=args.resolution,
     )
-    payload_deleted = delete_query_audit_payload(
-        paths.root,
-        existing["evidence"],
-    )
-    item["review_status"] = _audit_review_status(str(item["status"]))
+    item = resolved["item"]
     result = {
         "schema_version": 1,
         "status": "resolved",
         "mode": "apply",
         "workspace_mutated": True,
         "item": item,
-        "payload_deleted": payload_deleted,
-        "state_commit_seq": store.state_commit_seq(),
+        "payload_deleted": resolved["payload_deleted"],
+        "payload_retained": resolved["payload_retained"],
+        "state_commit_seq": resolved["state_commit_seq"],
         "error_code": None,
     }
     _emit_model(
@@ -1640,16 +1616,6 @@ def cmd_audit_resolve(args: argparse.Namespace) -> int:
         ],
     )
     return ExitCode.OK
-
-
-def _audit_review_status(status: str) -> str:
-    return {
-        "OPEN": "pending",
-        "IN_REVIEW": "pending",
-        "RESOLVED": "approved",
-        "REJECTED": "rejected",
-        "WAIVED": "not_required",
-    }.get(status, "unavailable")
 
 
 def cmd_run(args: argparse.Namespace) -> int:

@@ -1,6 +1,6 @@
 # Evo Wiki 架构说明
 
-Evo Wiki 1.0.1 是“Agent 生成内容，CLI 构建平台”的知识平台生成器。
+Evo Wiki 2.0.0 是“Agent 生成内容，CLI 构建平台”的知识平台生成器。
 
 ```mermaid
 flowchart LR
@@ -119,10 +119,23 @@ artifacts/wiki/wiki-src/
 
 Python 不调用模型 API，因此初始化 stub 必须先由 Agent 完成。完整 platform 对 stub 设置质量门禁。
 
+新建 workspace 的 `wiki.json` 写入 `content_contract_version: 2`。配置缺少该字段的既有 workspace
+按契约 v1 兼容，不写回配置。契约 v2 在 Wiki lane 中检查每份 corpus 文件是否具有唯一来源页、
+来源路径是否规范、所有页面是否从首页可达，并把 error 作为 LightRAG 写入前的阻断条件。
+`wiki-health.json` 与 `wiki-report.json` 公开契约版本、来源覆盖率、来源/实体映射数和歧义统计。
+
 实体 frontmatter 可声明 `graph_label` 与 `aliases`；缺省 graph label 为页面 title，重复 label
 属于映射完整性错误。渲染器公开 `wiki-registry.json`，只包含实体到 Wiki slug 以及 source
 basename 到来源页的唯一映射，不包含 workspace 绝对路径。概念/实体页据此展示“来源依据”，
-Wiki 和图谱也通过同一注册表双向跳转。
+Wiki 和图谱也通过同一注册表双向跳转。SPA 还会从当前 citations 解析 source basename，
+再通过对应 source 的 `graph_labels` 激活实体链接候选；只有全局唯一、路径合法且被本次引用覆盖
+的实体标题、graph label 或别名可以链接。每个实体每条回答只链接首次出现，裸匿名名称和受
+Markdown/HTML 保护的片段保持原样。
+
+SPA 的问答和审核详情复用同一安全 Markdown 渲染器。普通文本先转义，再生成受控的标题、强调、
+列表、引用、表格和代码 HTML；原始 HTML 不执行，Markdown 图片不发起远程加载，非法协议不生成
+链接。表格和代码块在窄屏容器内滚动。标签页会话只保存纯文本回答和结构化 citations，恢复时
+重新渲染，不持久化 HTML。
 
 ## 5. LightRAG 边界
 
@@ -190,7 +203,8 @@ Browser → Nginx/认证 → 查询网关 → LightRAG
 2. 检查 LightRAG workspace、结构化引用和 `bypass` 能力；
 3. 校验最多 3 个完整 user/assistant 对的受控上下文，并强制请求 references 和 chunk content；
 4. 遍历全部引用，将非空片段唯一映射到 `ACTIVE + PROCESSED/OPEN` 绑定关系；
-5. 执行来源、整体词法相关性和关键字面事实检查，并保留所有有效引用；
+5. 对每条来源执行归属、至少两个有效问题信号、宽泛法条的本地条文支持和关键字面事实检查；
+   无法确认相关性的引用不作为可信 citation；
 6. 首轮没有有效引用、回答为空或返回拒答文本时，以 `mode=bypass` 调用同一 LightRAG 服务；
 7. 最终非空回答一律以 `generation_status=succeeded` 返回；证据和人工审核状态不阻断正文。
 
@@ -216,21 +230,22 @@ schema v2 客户端可以不发送历史；发送时单条最多 4,000 字符，
 APPROVED|REJECTED` 结案并删除快照。快照写入失败时答案仍交付，
 `review_status=unavailable`，并记录运维错误。
 
-SPA 对三种成功证据状态分别显示“已引用知识库资料”“部分依据待核验”和“未检索到知识库依据，
-此回答由模型通用知识生成”。正文不折叠；行内 `[n]` 定位到“回答依据 → 片段 → Wiki 来源”
-证据卡。模型自由格式 References 会被剥离，只有结构化 citations 作为来源。
+SPA 对三种成功证据状态分别显示“已引用知识库资料”“部分依据待核验”和“本地知识库未覆盖，
+已进入人工审核”。正文不折叠；`ungrounded` 回答不渲染任何行内可信引用或证据卡，而明确显示
+“暂无可信本地依据”。其余回答的行内 `[n]` 定位到“回答依据 → 片段 → Wiki 来源”证据卡；来源
+存在 registry 映射时整卡直接进入来源 Wiki。回答内实体链接同样以结构化
+citations 为约束，不把 registry 中存在但本次证据未覆盖的模型提及包装成已确认链接。模型
+自由格式 References 会被剥离，只有结构化 citations 作为来源。
 
-存在 citations 时，SPA 在回答交付后异步拉取一个展示型小子图。seed 只允许来自：
+主问答页使用 schema v1 的标签页级 `sessionStorage` 快照保存成功展示的消息、裁剪后的
+citations、最近对话上下文、草稿和检索参数。恢复时重新经过同一安全 Markdown、实体链接和
+引用卡渲染链，而不是保存或回放 HTML；损坏或不兼容快照直接丢弃。失败回答、加载状态及审核
+详情不持久化，“清空”写回空会话。
 
-1. 引用对象显式携带的实体 `graph_label`；
-2. `wiki-registry.json` 中由实体页 `sources` 建立的“引用文档 → graph label”映射。
-
-多个候选按当前问题关键词与其对应引用片段的确定性词项相关性降序选择。图响应必须包含与
-候选 label 经 NFKC/大小写归一化后精确相等的节点 ID 或 label；不做包含匹配，也不回退到
-首节点。展示型子图固定为 depth 1、最多 24 个节点、最多 3 个 seed 尝试。候选均未精确命中、
-图响应为空、超时或不可用时只移除子图区，不修改 `generation_status`、`evidence_status` 或
-`review_status`。独立图谱页仍默认 depth 2 / 50 节点，使用确定性 BFS 分层、客户端上限、
-标签碰撞控制、缩放/复位与键盘节点操作；节点选择不会立即导航。
+问答结果不发起图谱请求，只展示回答、审核预警和结构化 citations。独立图谱页与实体页图谱
+邻域继续使用 `/api/graphs`，默认 depth 2 / 50 节点，并保留确定性 BFS 分层、客户端上限、
+标签碰撞控制、缩放/复位与键盘节点操作；节点选择不会立即导航。图谱加载失败不修改
+`generation_status`、`evidence_status` 或 `review_status`。
 
 ## 8. 本地预览与生产导出
 
@@ -282,7 +297,7 @@ Evidence Subgraph 是 wheel 内的开发者运行时 Skill，不注册为普通 
 
 ## 11. 支持范围
 
-1.0.1 的部署假设：
+2.0.0 的部署假设：
 
 - 单主机；
 - 本地文件系统；

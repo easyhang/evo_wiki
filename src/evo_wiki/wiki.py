@@ -11,6 +11,7 @@ from pathlib import PurePosixPath
 from typing import Callable
 
 from .config import EvoConfig
+from .corpus import scan_corpus
 from .paths import ProjectPaths
 from .spa_assets import write_spa_assets
 from .state.contracts import StateError
@@ -81,7 +82,8 @@ def update_wiki_progress(paths: ProjectPaths, progress: dict, phase: str, status
 
 
 def render_wiki(paths: ProjectPaths, config: EvoConfig) -> dict:
-    config.validate(paths.root)
+    presentation = config.validate(paths.root)
+    corpus_files = scan_corpus(paths.root, paths.corpus)
     progress: dict = {
         "schema_version": 1,
         "lane": "wiki",
@@ -145,7 +147,16 @@ def render_wiki(paths: ProjectPaths, config: EvoConfig) -> dict:
         update_wiki_progress(paths, progress, "write_dependency_graph", "running")
 
         # 结束阶段必须 lint：链接、孤儿页、索引收录、audit/log 形状与 HTML 必需原文页结构在这里汇总。
-        health = lint_wiki_artifacts(paths.root, paths.wiki_src, paths.wiki_audit, paths.wiki_log)
+        health = lint_wiki_artifacts(
+            paths.root,
+            paths.wiki_src,
+            paths.wiki_audit,
+            paths.wiki_log,
+            content_contract_version=presentation[
+                "content_contract_version"
+            ],
+            corpus_paths=[item.path for item in corpus_files],
+        )
         write_json(paths.wiki_reports / "wiki-health.json", health)
         update_wiki_progress(
             paths,
@@ -158,6 +169,9 @@ def render_wiki(paths: ProjectPaths, config: EvoConfig) -> dict:
 
         report = {
             "status": "success" if health["status"] in {"clean", "issues_found"} else "failed",
+            "content_contract_version": presentation[
+                "content_contract_version"
+            ],
             "generated_at": utc_now(),
             "page_count": len(pages),
             "html_output": relpath(paths.wiki_dist / "index.html", paths.root),
@@ -185,6 +199,7 @@ def render_wiki(paths: ProjectPaths, config: EvoConfig) -> dict:
                 for page in pages
             ],
             "health": health,
+            "contract": health["contract"],
             "warnings": collect_warnings(paths, pages, health),
         }
         write_json(paths.wiki_reports / "wiki-report.json", report)

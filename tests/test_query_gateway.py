@@ -520,7 +520,7 @@ def test_gateway_filters_individually_irrelevant_mapped_citation(
     assert result.audit_id
 
 
-def test_gateway_marks_short_question_as_partially_grounded(
+def test_gateway_marks_short_question_as_ungrounded_and_audited(
     tmp_path: Path,
 ):
     _, store, config, _ = _gateway_workspace(tmp_path)
@@ -537,10 +537,77 @@ def test_gateway_marks_short_question_as_partially_grounded(
     )
 
     assert result.generation_status == "succeeded"
-    assert result.answer_origin == "knowledge_base"
-    assert result.evidence_status == "partially_grounded"
+    assert result.answer_origin == "general_model"
+    assert result.evidence_status == "ungrounded"
     assert result.review_status == "pending"
-    assert result.citations
+    assert result.citations == []
+    assert result.audit_id
+    assert store.audit_item(result.audit_id)["trigger_code"] == (
+        "QUERY_REFERENCE_RELEVANCE_UNVERIFIED"
+    )
+
+
+def test_gateway_removes_weakly_overlapping_reference_and_audits(
+    tmp_path: Path,
+):
+    _, store, config, _ = _gateway_workspace(tmp_path)
+    response = _response(content=["案卷使用蓝色封皮归档。"])
+    response["response"] = "天空呈蓝色是因为瑞利散射。"
+    client = FakeQueryClient(response)
+    gateway = TrustedQueryGateway(
+        store,
+        config,
+        client=client,
+        audit_key=b"0123456789abcdef0123456789abcdef",
+    )
+
+    result = gateway.query(
+        GatewayQueryRequest(query="天空为什么是蓝色的？"),
+        principal="reader-a",
+    )
+
+    assert result.generation_status == "succeeded"
+    assert result.answer_origin == "general_model"
+    assert result.evidence_status == "ungrounded"
+    assert result.review_status == "pending"
+    assert result.citations == []
+    assert result.audit_id
+    assert store.audit_item(result.audit_id)["trigger_code"] == (
+        "QUERY_REFERENCE_RELEVANCE_INSUFFICIENT"
+    )
+    assert [item["mode"] for item in client.query_payloads] == [
+        "mix",
+        "bypass",
+    ]
+
+
+def test_gateway_requires_local_statutory_support_for_broad_law_question(
+    tmp_path: Path,
+):
+    _, store, config, _ = _gateway_workspace(tmp_path)
+    response = _response(content=["韩永仁因故意伤害被判刑。"])
+    response["response"] = "故意伤害罪的构成要件包括故意和伤害行为。"
+    gateway = TrustedQueryGateway(
+        store,
+        config,
+        client=FakeQueryClient(response),
+        audit_key=b"0123456789abcdef0123456789abcdef",
+    )
+
+    result = gateway.query(
+        GatewayQueryRequest(query="故意伤害罪的构成要件是什么？"),
+        principal="reader-a",
+    )
+
+    assert result.generation_status == "succeeded"
+    assert result.answer_origin == "general_model"
+    assert result.evidence_status == "ungrounded"
+    assert result.review_status == "pending"
+    assert result.citations == []
+    assert result.audit_id
+    assert store.audit_item(result.audit_id)["trigger_code"] == (
+        "QUERY_LOCAL_LAW_SUPPORT_MISSING"
+    )
 
 
 def test_gateway_marks_unsupported_critical_number_as_partial(
@@ -1086,6 +1153,212 @@ def test_asgi_gateway_requires_identity_and_returns_strict_contract(
         invalid.json()["error_code"]
         == "QUERY_REQUEST_INVALID"
     )
+
+
+def test_local_audit_center_rejects_retains_and_warns_on_repeat(
+    tmp_path: Path,
+):
+    from starlette.testclient import TestClient
+
+    project, store, config, _ = _gateway_workspace(
+        tmp_path,
+        mode="shadow",
+    )
+    config["security"]["auth_mode"] = "local_single_user"
+    gateway = TrustedQueryGateway(
+        store,
+        config,
+        client=FakeQueryClient(
+            {"response": "", "references": []},
+            bypass_response={"response": "需要人工核验的通用回答。"},
+        ),
+        audit_key=b"0123456789abcdef0123456789abcdef",
+    )
+    request = GatewayQueryRequest(query="知识库之外的问题是什么？")
+    first = gateway.query(request, principal="local-single-user")
+    assert first.audit_id
+    payload_path = (
+        project
+        / "artifacts"
+        / "query-audit"
+        / "open"
+        / f"{first.audit_id}.json"
+    )
+    assert payload_path.is_file()
+
+    with TestClient(create_gateway_app(gateway)) as client:
+        capabilities = client.get("/api/capabilities")
+        listed = client.get("/api/audits?status=OPEN")
+        detail = client.get(f"/api/audits/{first.audit_id}")
+        invalid_status = client.get("/api/audits?status=UNKNOWN")
+        rejected = client.post(
+            f"/api/audits/{first.audit_id}/resolve",
+            json={"resolution": "REJECTED"},
+        )
+        rejected_detail = client.get(f"/api/audits/{first.audit_id}")
+        duplicate = client.post(
+            f"/api/audits/{first.audit_id}/resolve",
+            json={"resolution": "REJECTED"},
+        )
+        repeated = client.post(
+            "/api/query",
+            json={"schema_version": 2, "query": request.query},
+        )
+        different = client.post(
+            "/api/query",
+            json={"schema_version": 2, "query": "另一个知识库问题"},
+        )
+
+    assert capabilities.json()["audit_center"] is True
+    assert listed.status_code == 200
+    assert listed.json()["items"][0]["question_summary"] == request.query
+    assert detail.json()["item"]["content"]["answer"] == "需要人工核验的通用回答。"
+    assert invalid_status.status_code == 400
+    assert rejected.status_code == 200
+    assert rejected.json()["item"]["review_status"] == "rejected"
+    assert rejected.json()["payload_retained"] is True
+    assert rejected.json()["payload_deleted"] is False
+    assert payload_path.is_file()
+    assert rejected_detail.json()["item"]["content_available"] is True
+    assert duplicate.status_code == 409
+    assert repeated.status_code == 200
+    assert repeated.json()["review_history"] == {
+        "previous_rejection_count": 1,
+        "exact_rejected_answer_repeat": True,
+    }
+    assert different.json()["review_history"] == {
+        "previous_rejection_count": 0,
+        "exact_rejected_answer_repeat": False,
+    }
+
+
+def test_local_audit_center_approval_deletes_protected_content(
+    tmp_path: Path,
+):
+    from starlette.testclient import TestClient
+
+    project, store, config, _ = _gateway_workspace(
+        tmp_path,
+        mode="shadow",
+    )
+    config["security"]["auth_mode"] = "local_single_user"
+    gateway = TrustedQueryGateway(
+        store,
+        config,
+        client=FakeQueryClient(
+            {"response": "", "references": []},
+            bypass_response={"response": "待通过的通用回答。"},
+        ),
+        audit_key=b"0123456789abcdef0123456789abcdef",
+    )
+    result = gateway.query(
+        GatewayQueryRequest(query="待通过的问题"),
+        principal="local-single-user",
+    )
+    assert result.audit_id
+    payload_path = (
+        project
+        / "artifacts"
+        / "query-audit"
+        / "open"
+        / f"{result.audit_id}.json"
+    )
+
+    with TestClient(create_gateway_app(gateway)) as client:
+        approved = client.post(
+            f"/api/audits/{result.audit_id}/resolve",
+            json={"resolution": "APPROVED"},
+        )
+        detail = client.get(f"/api/audits/{result.audit_id}")
+
+    assert approved.status_code == 200
+    assert approved.json()["item"]["review_status"] == "approved"
+    assert approved.json()["payload_deleted"] is True
+    assert approved.json()["payload_retained"] is False
+    assert not payload_path.exists()
+    assert detail.json()["item"]["content_available"] is False
+    assert detail.json()["item"]["content_error_code"] == (
+        "QUERY_AUDIT_PAYLOAD_MISSING"
+    )
+
+
+def test_trusted_proxy_does_not_expose_local_audit_center(
+    tmp_path: Path,
+):
+    from starlette.testclient import TestClient
+
+    _, store, config, _ = _gateway_workspace(tmp_path)
+    gateway = TrustedQueryGateway(
+        store,
+        config,
+        client=FakeQueryClient(_response()),
+        audit_key=b"0123456789abcdef0123456789abcdef",
+    )
+
+    with TestClient(create_gateway_app(gateway)) as client:
+        capabilities = client.get("/api/capabilities")
+        audits = client.get(
+            "/api/audits",
+            headers={"X-Evo-Principal": "reviewer-a"},
+        )
+
+    assert capabilities.status_code == 200
+    assert capabilities.json()["audit_center"] is False
+    assert audits.status_code == 404
+
+
+def test_local_audit_center_hides_tampered_snapshot(
+    tmp_path: Path,
+):
+    from starlette.testclient import TestClient
+
+    project, store, config, _ = _gateway_workspace(
+        tmp_path,
+        mode="shadow",
+    )
+    config["security"]["auth_mode"] = "local_single_user"
+    gateway = TrustedQueryGateway(
+        store,
+        config,
+        client=FakeQueryClient(
+            {"response": "", "references": []},
+            bypass_response={"response": "不可泄露的原始回答。"},
+        ),
+        audit_key=b"0123456789abcdef0123456789abcdef",
+    )
+    result = gateway.query(
+        GatewayQueryRequest(query="快照校验问题"),
+        principal="local-single-user",
+    )
+    assert result.audit_id
+    payload_path = (
+        project
+        / "artifacts"
+        / "query-audit"
+        / "open"
+        / f"{result.audit_id}.json"
+    )
+    payload_path.write_text('{"tampered":true}\n', encoding="utf-8")
+
+    with TestClient(create_gateway_app(gateway)) as client:
+        listed = client.get("/api/audits?status=OPEN")
+        detail = client.get(f"/api/audits/{result.audit_id}")
+        resolve = client.post(
+            f"/api/audits/{result.audit_id}/resolve",
+            json={"resolution": "REJECTED"},
+        )
+
+    listed_item = listed.json()["items"][0]
+    assert listed_item["question_summary"] is None
+    assert listed_item["content_available"] is False
+    assert listed_item["content_error_code"] == (
+        "QUERY_AUDIT_PAYLOAD_CHECKSUM_MISMATCH"
+    )
+    detail_item = detail.json()["item"]
+    assert detail_item["content_available"] is False
+    assert "content" not in detail_item
+    assert resolve.status_code == 409
+    assert store.audit_item(result.audit_id)["status"] == "OPEN"
 
 
 def test_asgi_delivers_ungrounded_answer_and_maps_empty_final_to_502(

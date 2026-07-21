@@ -77,6 +77,13 @@ def _legacy_workspace(tmp_path: Path, *, change_source_after_state: bool = False
         json.dumps(config, ensure_ascii=False, indent=2) + "\n",
         encoding="utf-8",
     )
+    wiki_json = project / "wiki.json"
+    wiki_config = json.loads(wiki_json.read_text(encoding="utf-8"))
+    wiki_config.pop("content_contract_version", None)
+    wiki_json.write_text(
+        json.dumps(wiki_config, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
     shutil.rmtree(project / "artifacts" / "state")
 
     source = project / "corpus" / "raw" / "legacy.md"
@@ -522,7 +529,24 @@ def _prepare_generate_wiki(project: Path) -> None:
     index.write_text(
         "---\ntitle: 首页\ntype: index\nsources:\n"
         "  - corpus/raw/generate.md\n---\n\n"
-        "# 首页\n\n自动生成平台的可交付内容。\n",
+        "# 首页\n\n自动生成平台的可交付内容。\n\n"
+        "- [[生成测试来源]]\n",
+        encoding="utf-8",
+    )
+    source_page = (
+        project
+        / "artifacts"
+        / "wiki"
+        / "wiki-src"
+        / "sources"
+        / "generate.md"
+    )
+    source_page.parent.mkdir(parents=True, exist_ok=True)
+    source_page.write_text(
+        "---\ntitle: 生成测试来源\ntype: source\nsources:\n"
+        "  - corpus/raw/generate.md\n---\n\n"
+        "# 生成测试来源\n\n## 摘要\n\n测试摘要。\n\n"
+        "## 原文内容\n\n自动生成平台的测试资料。\n",
         encoding="utf-8",
     )
 

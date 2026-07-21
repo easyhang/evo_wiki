@@ -47,6 +47,35 @@ def test_gate_keeps_relevant_reference_and_reports_match():
     assert decision["matched_signal_count"] >= 2
 
 
+def test_gate_rejects_a_single_weak_overlap_as_trusted_evidence():
+    references = [
+        {"file_path": "case.txt", "content": ["案卷使用蓝色封皮归档。"]},
+    ]
+
+    accepted, decision = gate_lightrag_references(
+        "天空为什么是蓝色的？",
+        references,
+    )
+
+    assert accepted == []
+    assert decision["code"] == "INSUFFICIENT_QUERY_SIGNAL_OVERLAP"
+    assert decision["matched_signal_count"] == 1
+
+
+def test_gate_requires_local_statutory_text_for_broad_law_question():
+    references = [
+        {"file_path": "case.txt", "content": ["韩永仁因故意伤害被判刑。"]},
+    ]
+
+    accepted, decision = gate_lightrag_references(
+        "故意伤害罪的构成要件是什么？",
+        references,
+    )
+
+    assert accepted == []
+    assert decision["code"] == "STATUTORY_SUPPORT_MISSING"
+
+
 def test_gate_does_not_guess_when_chunk_content_is_missing():
     references = [{"file_path": "case.txt", "content": []}]
 
