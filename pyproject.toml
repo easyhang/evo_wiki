@@ -4,18 +4,27 @@ build-backend = "hatchling.build"
 
 [project]
 name = "evo-wiki"
-version = "0.1.0"
-description = "Claude Code-first LLM Wiki knowledge platform development tool"
+version = "2.0.0"
+description = "AI-driven knowledge platform generator for secondary development"
 readme = "README.md"
 requires-python = ">=3.10"
 license = { text = "MIT" }
 authors = [{ name = "Evo wiki contributors" }]
-dependencies = []
+dependencies = [
+  "pydantic>=2.7,<3",
+  "httpx>=0.27,<1",
+  "starlette>=0.40,<1",
+  "uvicorn>=0.30,<1",
+]
 
 [project.optional-dependencies]
 dev = [
+  "build>=1.2",
+  "PyYAML>=6.0",
   "pytest>=8.0",
 ]
+# Backward-compatible extra name; platform runtime dependencies are core.
+gateway = []
 
 [project.scripts]
 evo-wiki = "evo_wiki.cli:main"
@@ -23,6 +32,14 @@ evo = "evo_wiki.cli:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/evo_wiki"]
+
+[tool.hatch.build.targets.sdist]
+include = [
+  "/src/evo_wiki",
+  "/README.md",
+  "/LICENSE",
+  "/pyproject.toml",
+]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

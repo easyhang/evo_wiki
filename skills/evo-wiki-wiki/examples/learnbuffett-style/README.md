@@ -1,6 +1,6 @@
-# LearnBuffett 风格 HTML 样例
+# LearnBuffett 风格 HTML 示例
 
-本目录把原 `references/style-samples/` 与 `examples/` 合并为一个完整样例：既包含原始语料 `corpus/raw/`，也包含 Wiki 源文件 `artifacts/wiki/wiki-src/` 和可直接打开的 HTML 成品 `site/`。
+本目录把原 `references/style-samples/` 与 `examples/` 合并为一个完整示例：既包含原始语料 `corpus/raw/`，也包含 Wiki 源文件 `artifacts/wiki/wiki-src/` 和可直接打开的 HTML 成品 `site/`。
 
 视觉风格参考 [learnbuffett.com](https://learnbuffett.com/)：暖色纸张底 + navy 侧栏 + 金色点缀 + 衬线标题的「典藏书卷」气质。该风格已固化进 `src/evo_wiki/wiki.py` 的 `STYLE` 与 `page_template`，所以 `evo-wiki render-wiki` 默认产出即为此风格。
 
@@ -47,7 +47,7 @@ skills/evo-wiki-wiki/examples/learnbuffett-style/
 | 实体页 | `warren-buffett.md`（人物类） | `berkshire-hathaway.md`（组织类） | 组织实体不写人物专属措辞 |
 | 原文页 | `1986-letter.md`（短原文） | `berkshire-notes.md`（长原文） | 长原文中 wikilink 分散在多个段落，右侧面板可跨段提取上下文摘录 |
 
-## 设计系统（Design Tokens）
+## 设计变量
 
 | 角色 | 值 |
 |---|---|
@@ -76,7 +76,7 @@ skills/evo-wiki-wiki/examples/learnbuffett-style/
 - **类型徽标**：概念、实体、摘要、原文使用不同颜色徽标。
 - **原文内容**：用普通 Markdown 段落保留原文，并在原文中为概念/实体加入 `[[wikilink]]`，以便右侧面板自动聚合。
 
-## 如何重新生成 HTML 样例
+## 如何重新生成 HTML 示例
 
 ```bash
 # 在临时项目里渲染 skills/evo-wiki-wiki/examples/learnbuffett-style/artifacts/wiki/wiki-src，

@@ -11,6 +11,9 @@ class ProjectPaths:
     root: Path
     corpus: Path
     artifacts: Path
+    state: Path
+    state_database: Path
+    state_backups: Path
     agent: Path
     wiki: Path
     wiki_src: Path
@@ -26,7 +29,11 @@ class ProjectPaths:
     lightrag_reports: Path
     lightrag_state: Path
     lightrag_queries: Path
+    generation: Path
+    generation_report: Path
     platform: Path
+    query_audit: Path
+    query_audit_open: Path
 
     @classmethod
     def from_root(cls, root: str | Path) -> "ProjectPaths":
@@ -38,6 +45,9 @@ class ProjectPaths:
             root=root_path,
             corpus=root_path / "corpus",
             artifacts=artifacts,
+            state=artifacts / "state",
+            state_database=artifacts / "state" / "evo_wiki.sqlite3",
+            state_backups=artifacts / "state" / "backups",
             agent=artifacts / "agent",
             wiki=wiki,
             wiki_src=wiki / "wiki-src",
@@ -53,13 +63,18 @@ class ProjectPaths:
             lightrag_reports=lightrag / "reports",
             lightrag_state=lightrag / "state",
             lightrag_queries=lightrag / "queries",
+            generation=artifacts / "generation",
+            generation_report=artifacts / "generation" / "report.json",
             platform=artifacts / "platform",
+            query_audit=artifacts / "query-audit",
+            query_audit_open=artifacts / "query-audit" / "open",
         )
 
     def ensure_base_dirs(self) -> None:
         for path in [
             self.corpus / "raw",
             self.corpus / "assets",
+            self.state,
             self.agent,
             self.wiki_src,
             self.wiki_src / "concepts",
@@ -75,6 +90,8 @@ class ProjectPaths:
             self.lightrag_reports,
             self.lightrag_state,
             self.lightrag_queries,
+            self.generation,
             self.platform,
+            self.query_audit_open,
         ]:
             path.mkdir(parents=True, exist_ok=True)
