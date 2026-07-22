@@ -91,6 +91,8 @@ DEFAULT_PROJECT = {
     "lightrag": {
         "mode": "service",
         "base_url": "",
+        # [MULTI-WS] 新增：发送到 LightRAG 服务的 LIGHTRAG-WORKSPACE 头值。
+        # 留空时不发送该头（向后兼容单 workspace 服务）。
         "workspace": "",
         "api_key_env": "LIGHTRAG_API_KEY",
         "bearer_token_env": "LIGHTRAG_BEARER_TOKEN",
@@ -215,6 +217,8 @@ LIGHTRAG_CONFIG_EXAMPLE = {
     "_comment": "复制为 lightrag-config.json，并填写真实 LightRAG 服务。base_url 和 workspace 必填；凭据只通过环境变量注入。sync 控制提交后的有界 track 轮询。replacement 具有破坏性，完成 replace-plan 审查前必须保持关闭。embedding.batch_size 只是客户端兼容性期望，不会修改远端配置；请使用 doctor --check-service 核对。",
     "mode": "service",
     "base_url": "http://YOUR_LIGHTRAG_SERVER:9621",
+    # [MULTI-WS] 新增：多 workspace 模式下发送 LIGHTRAG-WORKSPACE 头。
+    # 如果服务端启用了 RagPool，请设置该项为目标 workspace 名称。
     "workspace": "evo_wiki",
     "api_key_env": "LIGHTRAG_API_KEY",
     "bearer_token_env": "LIGHTRAG_BEARER_TOKEN",

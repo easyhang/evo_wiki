@@ -173,7 +173,8 @@ def build_lightrag(
         partition_id, backend_fingerprint = state_store.ensure_partition(
             config
         )
-    client = LightRAGServiceClient(service["base_url"], headers=service["headers"], timeout=service["timeout_seconds"])
+    # [MULTI-WS] 将 workspace 传递给客户端，用于 LIGHTRAG-WORKSPACE 请求头。
+    client = LightRAGServiceClient(service["base_url"], headers=service["headers"], timeout=service["timeout_seconds"], workspace=service.get("workspace"))
     print(
         f"Embedding batch expectation: requested={service['embedding_batch_size']} "
         f"documents={len(text_docs)}; verify the remote value with `doctor --check-service`",
@@ -575,9 +576,11 @@ def _public_track_snapshot(source_path: str, snapshot: TrackSnapshot) -> dict[st
 
 
 class LightRAGServiceClient:
-    def __init__(self, base_url: str, *, headers: dict[str, str] | None = None, timeout: float = 30.0):
+    # [MULTI-WS] 新增 workspace 参数：若提供则每个请求携带 LIGHTRAG-WORKSPACE 头。
+    def __init__(self, base_url: str, *, headers: dict[str, str] | None = None, timeout: float = 30.0, workspace: str | None = None):
         self.base_url = base_url.rstrip("/")
         self.headers = headers or {}
+        self.workspace = workspace
         self.timeout = timeout
 
     def post_json(self, path: str, payload: dict[str, Any]) -> dict[str, Any]:
@@ -586,6 +589,9 @@ class LightRAGServiceClient:
     def request_json(self, method: str, path: str, payload: dict[str, Any] | None = None) -> dict[str, Any]:
         data = None if payload is None else json.dumps(payload, ensure_ascii=False).encode("utf-8")
         headers = {"Accept": "application/json", **self.headers}
+        # [MULTI-WS] 若配置了 workspace，每次请求携带 LIGHTRAG-WORKSPACE 头。
+        if self.workspace:
+            headers["LIGHTRAG-WORKSPACE"] = self.workspace
         if data is not None:
             headers["Content-Type"] = "application/json"
         request = Request(f"{self.base_url}{path}", data=data, headers=headers, method=method)
@@ -622,7 +628,8 @@ def resolve_lightrag_service_config(config: dict[str, Any] | None = None) -> dic
             "LightRAG base_url is required. Create `lightrag-config.json` from "
             "`lightrag-config.example.json` and set `base_url`, or set LIGHTRAG_BASE_URL."
         )
-    workspace = cfg.get("workspace")
+    # [MULTI-WS] 优先从环境变量读取 workspace，否则从配置文件取，并校验格式。
+    workspace = os.environ.get("LIGHTRAG_WORKSPACE") or cfg.get("workspace") or ""
     if not isinstance(workspace, str) or not WORKSPACE_PATTERN.fullmatch(workspace):
         raise LightRAGBuildError(
             "lightrag.workspace is required and must contain only letters, numbers, and underscores"
@@ -669,6 +676,7 @@ def resolve_lightrag_service_config(config: dict[str, Any] | None = None) -> dic
     public = {
         "mode": "service",
         "base_url": base_url.rstrip("/"),
+        # [MULTI-WS] 将 workspace 信息写入 public 摘要，便于调试和报告。
         "workspace": workspace,
         "api_key_env": api_key_env,
         "bearer_token_env": bearer_token_env,
@@ -688,6 +696,7 @@ def resolve_lightrag_service_config(config: dict[str, Any] | None = None) -> dic
     }
     return {
         "base_url": public["base_url"],
+        "workspace": workspace or None,
         "headers": headers,
         "timeout_seconds": timeout_seconds,
         "embedding_batch_size": embedding_batch_size,
