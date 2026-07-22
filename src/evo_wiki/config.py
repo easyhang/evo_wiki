@@ -30,6 +30,9 @@ DEFAULT_PROJECT = {
     "lightrag": {
         "mode": "service",
         "base_url": "",
+        # [MULTI-WS] 新增：发送到 LightRAG 服务的 LIGHTRAG-WORKSPACE 头值。
+        # 留空时不发送该头（向后兼容单 workspace 服务）。
+        "workspace": "",
         "api_key_env": "LIGHTRAG_API_KEY",
         "bearer_token_env": "LIGHTRAG_BEARER_TOKEN",
         "input_file": "artifacts/lightrag/input/documents.jsonl",
@@ -74,6 +77,9 @@ LIGHTRAG_CONFIG_EXAMPLE = {
     "_comment": "Copy this file to lightrag-config.json and fill in your LightRAG service details. lightrag-config.json is gitignored. base_url is required before running the LightRAG lane or export-platform.",
     "mode": "service",
     "base_url": "http://YOUR_LIGHTRAG_SERVER:9621",
+    # [MULTI-WS] 新增：多 workspace 模式下发送 LIGHTRAG-WORKSPACE 头。
+    # 如果服务端启用了 RagPool，请设置该项为目标 workspace 名称。
+    "workspace": "your_workspace",
     "api_key_env": "LIGHTRAG_API_KEY",
     "bearer_token_env": "LIGHTRAG_BEARER_TOKEN",
     "timeout_seconds": 30,

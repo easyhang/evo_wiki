@@ -12,11 +12,12 @@ skills/evo-wiki-wiki/examples/learnbuffett-style/
   corpus/raw/                         # 样例原始语料（中文）
     sample-notes.md
     1986-letter.md
+    berkshire-notes.md                # 组织与策略分析（较长语料）
   artifacts/wiki/wiki-src/            # Wiki Markdown 源
     index.md                          # 入口页
     concepts/                         # 概念页：护城河、内在价值
-    entities/                         # 实体页：沃伦·巴菲特
-    sources/                          # 原文页：摘要 + 原文全文
+    entities/                         # 实体页：沃伦·巴菲特（人物）、伯克希尔·哈撒韦（组织）
+    sources/                          # 原文页：摘要 + 原文全文（含短/长两种示例）
   site/                               # 已渲染 HTML 成品，可直接打开
     index.html
     concepts/*.html
@@ -35,6 +36,16 @@ skills/evo-wiki-wiki/examples/learnbuffett-style/
 - **原文页**：`sources/*.md` 必须由「摘要」和「原文内容」组成，且必须保留完整原文（摘要直接附在原文页内）；原文段落中为概念/实体加入 `[[wikilink]]`，右侧面板会按概念/实体分组展示这些链接，并可展开查看原文中的上下文摘录。
 - **语料约束**：概念页、实体页均严格基于 `corpus/raw/`，不使用模型常识补充未在语料中出现的事实。
 - **语言一致**：本样例语料、页面标题、正文、导航与说明均以中文为主。
+
+## 页面变体
+
+为帮助 Agent 面对不同语料时稳定产出正确结构的页面，本样例演示了以下模板变体：
+
+| 页面类型 | 变体 1（已有） | 变体 2（新增） | 说明 |
+|---|---|---|---|
+| 概念页 | `intrinsic-value.md`（纯文本） | `moat.md`（含 Mermaid 图） | 展示有/无图表的两种概念页 |
+| 实体页 | `warren-buffett.md`（人物类） | `berkshire-hathaway.md`（组织类） | 组织实体不写人物专属措辞 |
+| 原文页 | `1986-letter.md`（短原文） | `berkshire-notes.md`（长原文） | 长原文中 wikilink 分散在多个段落，右侧面板可跨段提取上下文摘录 |
 
 ## 设计系统（Design Tokens）
 
