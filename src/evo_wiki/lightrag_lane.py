@@ -102,7 +102,8 @@ def build_lightrag(
         return report
 
     service = resolve_lightrag_service_config(config)
-    client = LightRAGServiceClient(service["base_url"], headers=service["headers"], timeout=service["timeout_seconds"])
+    # [MULTI-WS] 将 workspace 传递给客户端，用于 LIGHTRAG-WORKSPACE 请求头。
+    client = LightRAGServiceClient(service["base_url"], headers=service["headers"], timeout=service["timeout_seconds"], workspace=service.get("workspace"))
 
     try:
         for doc in text_docs:
@@ -175,9 +176,11 @@ def build_lightrag(
 
 
 class LightRAGServiceClient:
-    def __init__(self, base_url: str, *, headers: dict[str, str] | None = None, timeout: float = 30.0):
+    # [MULTI-WS] 新增 workspace 参数：若提供则每个请求携带 LIGHTRAG-WORKSPACE 头。
+    def __init__(self, base_url: str, *, headers: dict[str, str] | None = None, timeout: float = 30.0, workspace: str | None = None):
         self.base_url = base_url.rstrip("/")
         self.headers = headers or {}
+        self.workspace = workspace
         self.timeout = timeout
 
     def post_json(self, path: str, payload: dict[str, Any]) -> dict[str, Any]:
@@ -186,6 +189,9 @@ class LightRAGServiceClient:
     def request_json(self, method: str, path: str, payload: dict[str, Any] | None = None) -> dict[str, Any]:
         data = None if payload is None else json.dumps(payload, ensure_ascii=False).encode("utf-8")
         headers = {"Accept": "application/json", **self.headers}
+        # [MULTI-WS] 若配置了 workspace，每次请求携带 LIGHTRAG-WORKSPACE 头。
+        if self.workspace:
+            headers["LIGHTRAG-WORKSPACE"] = self.workspace
         if data is not None:
             headers["Content-Type"] = "application/json"
         request = Request(f"{self.base_url}{path}", data=data, headers=headers, method=method)
@@ -213,6 +219,8 @@ def resolve_lightrag_service_config(config: dict[str, Any] | None = None) -> dic
             "LightRAG base_url is required. Create `lightrag-config.json` from "
             "`lightrag-config.example.json` and set `base_url`, or set LIGHTRAG_BASE_URL."
         )
+    # [MULTI-WS] 从环境变量或配置文件读取 workspace 名称，用作 LIGHTRAG-WORKSPACE 请求头。
+    workspace = os.environ.get("LIGHTRAG_WORKSPACE") or cfg.get("workspace") or ""
     api_key_env = cfg.get("api_key_env", "LIGHTRAG_API_KEY")
     bearer_token_env = cfg.get("bearer_token_env", "LIGHTRAG_BEARER_TOKEN")
     api_key = os.environ.get(api_key_env) or cfg.get("api_key")
@@ -228,6 +236,8 @@ def resolve_lightrag_service_config(config: dict[str, Any] | None = None) -> dic
     public = {
         "mode": "service",
         "base_url": base_url.rstrip("/"),
+        # [MULTI-WS] 将 workspace 信息写入 public 摘要，便于调试和报告。
+        "workspace": workspace or None,
         "api_key_env": api_key_env,
         "bearer_token_env": bearer_token_env,
         "auth": {
@@ -237,6 +247,7 @@ def resolve_lightrag_service_config(config: dict[str, Any] | None = None) -> dic
     }
     return {
         "base_url": public["base_url"],
+        "workspace": workspace or None,
         "headers": headers,
         "timeout_seconds": timeout_seconds,
         "public": public,

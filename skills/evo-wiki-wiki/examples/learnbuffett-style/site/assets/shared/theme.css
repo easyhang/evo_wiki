@@ -1,0 +1,26 @@
+
+/* Evo wiki shared design tokens + shared components — single source for wiki + SPA. */
+:root {
+  color-scheme: light;
+  --bg:#FFFFFF; --bg2:#F5F6F8; --text:#111111; --text2:#555555;
+  --heading:#111111; --heading2:#1E293B;
+  --accent:#2563EB; --accent-light:#3B82F6; --accent-strong:#7C3AED;
+  --accent-glow:rgba(37,99,235,.10); --accent-border:rgba(37,99,235,.25);
+  --danger:#C92A3A;
+  --sidebar-bg:#FFFFFF; --cream:#F0F4FF;
+  --border:#E5E7EB; --card:#FFFFFF; --link:#2563EB;
+  --serif:'Noto Serif SC','Crimson Pro',Georgia,'Times New Roman',serif;
+  --sans:'DM Sans',-apple-system,BlinkMacSystemFont,'PingFang SC','Microsoft YaHei',sans-serif;
+  --sidebar-w:260px;
+  --topbar-h:48px;
+}
+
+/* Cross-app topbar (shared shell): identical on Wiki + SPA, defined once here so
+   the two surfaces can never drift. Both style.css and app.css inherit it. */
+#evo-topbar { position:fixed; top:0; left:0; right:0; height:var(--topbar-h); z-index:200; background:var(--bg); border-bottom:1px solid var(--border); }
+.evo-topbar-inner { max-width:1160px; margin:0 auto; height:100%; display:flex; align-items:center; justify-content:space-between; padding:0 20px; }
+.evo-topbar-brand { color:var(--text); text-decoration:none; font-family:var(--serif); font-size:15px; font-weight:700; }
+.evo-topbar-nav { display:flex; gap:4px; }
+.evo-topbar-link { color:var(--text2); text-decoration:none; font-size:13px; font-weight:500; padding:7px 14px; border-radius:8px; transition:all .15s; }
+.evo-topbar-link:hover { background:var(--accent-glow); color:var(--accent); }
+.evo-topbar-link.active { color:var(--accent); background:var(--accent-glow); font-weight:600; }
