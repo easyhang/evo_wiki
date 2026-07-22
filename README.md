@@ -34,6 +34,13 @@ Evo Wiki 不负责：
 - 自动删除、批量替换或重建 LightRAG 远端数据；
 - 多域 ACL、OAuth/RBAC、NFS/SMB、多主机或零停机部署。
 
+## 可复现演示模板
+
+[`examples/WIKI_demo/`](examples/WIKI_demo/) 提供 Evo Wiki 2.0.0 的公开复现模板，
+包括内容契约 v2 配置、通用 Wiki 页面模板、LightRAG 配置示例，以及静态 Wiki 和
+完整问答平台的运行步骤。示例不包含项目私有语料、真实凭据、运行数据库、审核记录、
+日志或生成产物；合作者需要提供自己的语料和 LightRAG 服务。
+
 ## 安装
 
 开发安装：

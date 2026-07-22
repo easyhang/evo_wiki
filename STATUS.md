@@ -31,6 +31,13 @@
 
 ## Current Optimization Progress
 
+- On 2026-07-22, added the public `examples/WIKI_demo` reproducibility
+  template for Evo Wiki 2.0.0. It documents separate static-Wiki and full
+  LightRAG-backed platform paths and includes only sanitized configuration and
+  neutral Wiki templates. The package intentionally excludes the nine-case
+  corpus and Wiki content, generated HTML, SQLite and backups, audit/query
+  records, logs, credentials, local service state, and absolute workstation
+  paths; collaborators must supply their own corpus and LightRAG service.
 - On 2026-07-21, tightened trusted-evidence delivery for local Q&A. A citation
   now needs at least two non-generic query signals in its own excerpt; a
   single weak overlap is discarded. Broad statutory questions additionally
