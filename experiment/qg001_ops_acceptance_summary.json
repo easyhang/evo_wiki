@@ -1,0 +1,117 @@
+{
+  "schema_version": 1,
+  "card": "QG-001-OPS-ACCEPTANCE",
+  "run_id": "qg001-2d6393c80eb24c6a",
+  "status": "passed",
+  "mode": "isolated_apply",
+  "source_workspace_mutated": false,
+  "source_guard": {
+    "database_schema_version": 1,
+    "state_commit_seq": 15,
+    "database_sha256": "sha256:c5c2d545af082d184a752ca9990decbf0689d7d24ef798fca9d2a725bd95b5c1",
+    "database_size_bytes": 143360,
+    "database_mtime_ns": 1784361526194602903,
+    "workspace_manifest_sha256": "sha256:3d7fcc03fbe679e0c9454a5f811a92a8bc8d445106a633a29971eb8f300a094f",
+    "remote": {
+      "document_count": 9,
+      "status_counts": {
+        "processed": 9
+      },
+      "chunks_count": 34,
+      "pipeline_idle": true
+    },
+    "manifest_unchanged": true,
+    "provider_config_unchanged": true
+  },
+  "migration": {
+    "status": "passed",
+    "database_schema_before": 1,
+    "database_schema_after": 4,
+    "repeated_upgrade_noop": true,
+    "verify": "PASS",
+    "gateway_check": "ready"
+  },
+  "auth": {
+    "unauthenticated_status": 401,
+    "wrong_credentials_status": 401,
+    "direct_lightrag_denied": true,
+    "identity_header_overwritten": true,
+    "basic_auth": "passed"
+  },
+  "shadow": {
+    "status": "passed",
+    "delivery_status": "answered",
+    "evidence_verdict": "shadow_failed",
+    "audit_created": true
+  },
+  "enforce": {
+    "status": "passed",
+    "delivery_status": "needs_audit",
+    "answer_released": false,
+    "audit": {
+      "opened": true,
+      "resolved": true,
+      "state_commit_seq_delta": 1
+    }
+  },
+  "audit": {
+    "opened": true,
+    "resolved": true,
+    "state_commit_seq_delta": 1
+  },
+  "webhook": {
+    "delivered_events": 9,
+    "signatures_valid": true,
+    "retry_event_id_stable": true,
+    "payload_redaction": "PASS"
+  },
+  "lease": {
+    "stale_blocked_before_delete": true,
+    "operator_abandon": true,
+    "inflight_observed": true
+  },
+  "maintenance": {
+    "heartbeat_stale_blocked": true,
+    "notification_failure_blocked": true,
+    "notification_before_delete": true,
+    "inflight_response_status": 503,
+    "final_fence_state": "CLOSED"
+  },
+  "replacement": {
+    "status": "completed",
+    "operations_completed": 2,
+    "delete_requests": 2,
+    "submit_requests": 2,
+    "max_submit_requests_per_operation": 1,
+    "effect_envelope_respected": true,
+    "post_replacement_query": "answered"
+  },
+  "counts": {
+    "query_requests": 6,
+    "document_post_requests": 5,
+    "pre_replacement_document_posts": 1,
+    "notification_attempts": 15,
+    "notification_deliveries": 9
+  },
+  "remote_final": {
+    "document_count": 1,
+    "status_counts": {
+      "processed": 1
+    },
+    "chunks_count": 1,
+    "pipeline_idle": true
+  },
+  "runtime": {
+    "schema_version": 4,
+    "lightrag_image_digest": "sha256:de09cd75e32b6b45b104625a9fb229f84f3dec4827ecffc825aa4438b196cbe6",
+    "nginx_image_digest": "sha256:65645c7bb6a0661892a8b03b89d0743208a18dd2f3f17a54ef4b76fb8e2f2a10"
+  },
+  "cleanup": {
+    "complete": true,
+    "containers_removed": 2,
+    "networks_removed": 1,
+    "runtime_removed": true
+  },
+  "workspace_mutated": true,
+  "error_code": null
+}

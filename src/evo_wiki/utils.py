@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import json
+import os
+import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -19,6 +21,34 @@ def read_json(path: Path, default: Any) -> Any:
 def write_json(path: Path, data: Any) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+
+
+def write_json_atomic(path: Path, data: Any) -> None:
+    """Atomically replace a JSON artifact in the destination directory."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    handle, temporary_name = tempfile.mkstemp(
+        prefix=f".{path.name}.",
+        suffix=".tmp",
+        dir=path.parent,
+        text=True,
+    )
+    temporary = Path(temporary_name)
+    try:
+        with os.fdopen(handle, "w", encoding="utf-8") as stream:
+            stream.write(json.dumps(data, ensure_ascii=False, indent=2) + "\n")
+            stream.flush()
+            os.fsync(stream.fileno())
+        temporary.replace(path)
+    finally:
+        if temporary.exists():
+            temporary.unlink()
+
+
+def append_jsonl(path: Path, record: dict[str, Any]) -> None:
+    """Append one UTF-8 JSON record without replacing earlier events."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("a", encoding="utf-8") as handle:
+        handle.write(json.dumps(record, ensure_ascii=False) + "\n")
 
 
 def slugify(value: str) -> str:
