@@ -34,20 +34,6 @@ Evo Wiki 不负责：
 - 自动删除、批量替换或重建 LightRAG 远端数据；
 - 多域 ACL、OAuth/RBAC、NFS/SMB、多主机或零停机部署。
 
-## 获取 XZT 分支
-
-当前可直接使用的版本位于 `XZT` 分支。克隆时请明确选择该分支：
-
-```bash
-git clone --branch XZT --single-branch \
-  https://github.com/easyhang/evo_wiki.git
-cd evo_wiki
-```
-
-不使用 Git 时，可以直接下载
-[XZT 分支 ZIP](https://github.com/easyhang/evo_wiki/archive/refs/heads/XZT.zip)，解压后进入
-仓库目录。GitHub 默认 `main` 分支不作为本指南的使用入口。
-
 ## 安装
 
 Windows 用户请在 WSL2 Ubuntu 中执行本项目的 Linux 开发流程，不要从原生 PowerShell、
