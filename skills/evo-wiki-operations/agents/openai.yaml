@@ -1,0 +1,7 @@
+interface:
+  display_name: "Evo Wiki 运维"
+  short_description: "诊断并维护 Evo Wiki 的迁移、网关、审计与备份流程"
+  brand_color: "#2563EB"
+  default_prompt: "使用 $evo-wiki-operations 诊断并安全维护 Evo Wiki workspace。"
+policy:
+  allow_implicit_invocation: true

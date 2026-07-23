@@ -1,0 +1,7 @@
+interface:
+  display_name: "Evo Wiki LightRAG"
+  short_description: "安全接入真实 LightRAG 服务并构建问答与图谱数据"
+  brand_color: "#2563EB"
+  default_prompt: "使用 $evo-wiki-lightrag 检查配置并安全更新已有的 LightRAG 服务。"
+policy:
+  allow_implicit_invocation: true

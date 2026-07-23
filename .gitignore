@@ -8,6 +8,15 @@ build/
 *.egg-info/
 .DS_Store
 
+# Local experiments and examples; keep them on disk but out of version control.
+/experiment/
+/examples/
+
+# Local technical report.
+/docs/evo_wiki_optimization_technical_report.md
+/docs/归档.zip
+/STATUS.md
+
 # Locally copied planning artifact (wiki-graphrag-platform-plan/v3.html).
 design_v3.html
 
