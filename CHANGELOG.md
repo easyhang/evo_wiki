@@ -1,5 +1,12 @@
 # Changelog
 
+## 2.0.1
+
+- 增加 `XZT` 分支的克隆、ZIP 下载、内置示例和自有语料开箱使用入口。
+- 补齐外部 LightRAG 多 workspace 请求头传递；一个项目目录固定绑定一个 workspace，
+  多个项目可共享同一服务。
+- 修复 wiki-only 自检和静态示例预览，且不再依赖或清理相邻 LightRAG 目录。
+
 ## 2.0.0
 
 - 新建 workspace 默认采用可执行的 Wiki 内容契约 v2，旧 workspace 无迁移兼容。

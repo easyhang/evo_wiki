@@ -36,6 +36,14 @@
 
 ## Current Optimization Progress
 
+- On 2026-07-23, prepared the 2.0.1 direct-use patch for the `XZT` branch.
+  README now provides explicit branch clone/ZIP entry points, a bundled
+  wiki-only preview, and an own-corpus Agent workflow. Existing LightRAG
+  workspace configuration is propagated through service probes, imports,
+  operations, retrieval, queries, and graphs; each Evo Wiki project directory
+  remains bound to one workspace while multiple projects may share one
+  external service. Wiki-only doctor and demo preview no longer require or
+  proxy LightRAG, and the demo no longer deletes sibling service data.
 - On 2026-07-22, added the public `examples/WIKI_demo` reproducibility
   template for Evo Wiki 2.0.0. It documents separate static-Wiki and full
   LightRAG-backed platform paths and includes only sanitized configuration and

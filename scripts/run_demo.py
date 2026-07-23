@@ -5,33 +5,32 @@
   python scripts/run_demo.py              # 增量运行（跳过已完成的步骤）
   python scripts/run_demo.py --clean      # 删掉 workspace/ 从头跑
   python scripts/run_demo.py --no-browser # 最后不自动打开浏览器
-  python scripts/run_demo.py --skip-lightrag  # 只跑 Wiki，不碰 LightRAG
+  python scripts/run_demo.py --skip-lightrag --serve  # 只跑 Wiki 并本地预览
 
 前置条件:
   1. evo-wiki 已安装: pip install -e .
-  2. LightRAG Server 已在 localhost:9621 运行:
-     cd ../LightRAG && .venv\\Scripts\\activate
-     python -m lightrag.api.lightrag_server --workspace demo --port 9621
+  2. 完整平台模式需要用户自行运行 LightRAG；可用 LIGHTRAG_BASE_URL 和
+     LIGHTRAG_WORKSPACE 指定服务及 workspace。
 """
 
 from __future__ import annotations
 
 import argparse
 import json
+import os
 import shutil
 import socket
 import subprocess
 import sys
 import webbrowser
 from pathlib import Path
+from urllib.parse import urlparse
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 EXAMPLE = PROJECT_ROOT / "skills" / "evo-wiki-wiki" / "examples" / "learnbuffett-style"
 WORKSPACE = PROJECT_ROOT / "workspace"
-LIGHTRAG_URL = "http://localhost:9621"
-LIGHTRAG_WS = "demo"
-# LightRAG 项目根目录（假设和 evo_wiki-main 同级）
-LIGHTRAG_ROOT = PROJECT_ROOT.parent / "LightRAG"
+LIGHTRAG_URL = os.environ.get("LIGHTRAG_BASE_URL", "http://127.0.0.1:9621")
+LIGHTRAG_WS = os.environ.get("LIGHTRAG_WORKSPACE", "demo")
 
 # ── terminal colours ──
 GREEN = "\033[92m"
@@ -96,19 +95,22 @@ def check_lightrag() -> None:
     returns 500 until the first workspace-tagged request wakes up RagPool.
     A raw TCP connect is a more reliable "is the server up?" check.
     """
-    host, port = "localhost", 9621
+    parsed = urlparse(LIGHTRAG_URL)
+    host = parsed.hostname
+    port = parsed.port or (443 if parsed.scheme == "https" else 80)
+    if not host:
+        fail(f"无效的 LIGHTRAG_BASE_URL: {LIGHTRAG_URL}")
+        sys.exit(1)
     try:
         with socket.create_connection((host, port), timeout=3):
             pass
-        ok(f"LightRAG TCP 端口可达: {host}:{port}")
-        print("     (首次 API 调用时会自动初始化 demo workspace，需等待数秒)")
+        ok(f"LightRAG TCP 端口可达: {host}:{port} (workspace: {LIGHTRAG_WS})")
     except OSError as exc:
         fail(f"无法连接 LightRAG: {host}:{port} —— {exc}")
         print()
-        print("  请先启动 LightRAG Server:")
-        print(f"    cd ../LightRAG")
-        print(f"    .venv\\Scripts\\activate")
-        print(f"    python -m lightrag.api.lightrag_server --workspace {LIGHTRAG_WS} --port 9621")
+        print("  请先启动自己的 LightRAG 服务，或设置：")
+        print("    export LIGHTRAG_BASE_URL='http://服务器地址:9621'")
+        print("    export LIGHTRAG_WORKSPACE='demo'")
         sys.exit(1)
 
 
@@ -133,12 +135,8 @@ def main() -> None:
         help="最后不自动打开浏览器",
     )
     parser.add_argument(
-        "--clean-lightrag", action="store_true",
-        help=f"同时删除 LightRAG 的 rag_storage/{LIGHTRAG_WS}/ 和 inputs/{LIGHTRAG_WS}/（解决 409 重复文档冲突）",
-    )
-    parser.add_argument(
         "--serve", action="store_true",
-        help="构建完成后启动 Python 开发服务器（无需 nginx），Ctrl+C 停止",
+        help="构建完成后在 127.0.0.1 启动本地预览，Ctrl+C 停止",
     )
     args = parser.parse_args()
 
@@ -157,23 +155,13 @@ def main() -> None:
     elif args.clean:
         ok("workspace/ 不存在，无需清理")
 
-    if args.clean_lightrag:
-        title("Step 1b: 清理 LightRAG demo workspace")
-        for sub in ["rag_storage", "inputs"]:
-            target = LIGHTRAG_ROOT / sub / LIGHTRAG_WS
-            if target.exists():
-                shutil.rmtree(target)
-                ok(f"已删除 LightRAG/{sub}/{LIGHTRAG_WS}/")
-            else:
-                ok(f"LightRAG/{sub}/{LIGHTRAG_WS}/ 不存在，跳过")
-        warn("请重启 LightRAG Server 以重建干净的 workspace")
-
     # ── Step 2: 初始化 ───────────────────────────────────────────
     title("Step 2: evo-wiki init")
     if step_done("init"):
         warn("已初始化，跳过")
     else:
-        run_cli("init")
+        profile = "wiki-only" if args.skip_lightrag else "local-platform"
+        run_cli("init", "--profile", profile)
         ok("项目结构已创建")
 
     # ── Step 3: 复制语料 ─────────────────────────────────────────
@@ -192,19 +180,23 @@ def main() -> None:
     if copied == 0:
         warn("语料已是最新，跳过")
 
-    # ── Step 4: 写入 lightrag-config.json ────────────────────────
-    title("Step 4: 写入 lightrag-config.json")
-    config_path = WORKSPACE / "lightrag-config.json"
-    config = {
-        "mode": "service",
-        "base_url": LIGHTRAG_URL,
-        "workspace": LIGHTRAG_WS,
-        "api_key_env": "LIGHTRAG_API_KEY",
-        "bearer_token_env": "LIGHTRAG_BEARER_TOKEN",
-        "timeout_seconds": 30,
-    }
-    config_path.write_text(json.dumps(config, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-    ok(f"已写入: {config_path.relative_to(PROJECT_ROOT)}")
+    if not args.skip_lightrag:
+        # ── Step 4: 写入 lightrag-config.json ────────────────────
+        title("Step 4: 写入 lightrag-config.json")
+        config_path = WORKSPACE / "lightrag-config.json"
+        config = {
+            "mode": "service",
+            "base_url": LIGHTRAG_URL,
+            "workspace": LIGHTRAG_WS,
+            "api_key_env": "LIGHTRAG_API_KEY",
+            "bearer_token_env": "LIGHTRAG_BEARER_TOKEN",
+            "timeout_seconds": 30,
+        }
+        config_path.write_text(
+            json.dumps(config, ensure_ascii=False, indent=2) + "\n",
+            encoding="utf-8",
+        )
+        ok(f"已写入: {config_path.relative_to(PROJECT_ROOT)}")
 
     # ── Step 5: 复制 wiki-src ────────────────────────────────────
     title("Step 5: 复制 wiki-src (learnbuffett 预制页面)")
@@ -236,7 +228,11 @@ def main() -> None:
 
     if args.skip_lightrag:
         title("完成！（仅 Wiki）")
-        _open_browser(args, WORKSPACE / "artifacts" / "wiki" / "dist" / "index.html")
+        serve_dir = WORKSPACE / "artifacts" / "wiki" / "dist"
+        if args.serve:
+            _start_static_server(serve_dir, args.no_browser)
+        else:
+            _open_browser(args, serve_dir / "index.html")
         return
 
     # ── Step 7: 准备 LightRAG 输入 ───────────────────────────────
@@ -266,112 +262,44 @@ def main() -> None:
     # ── Step 10: 完成 / 启动服务器 ────────────────────────────────
     platform_dir = WORKSPACE / "artifacts" / "platform"
 
-    if args.skip_lightrag:
-        # Wiki-only: serve from dist/
-        serve_dir = WORKSPACE / "artifacts" / "wiki" / "dist"
-        title("🎉 Wiki 构建完成！")
-    else:
-        serve_dir = platform_dir
-        title("🎉 Demo 全链路完成！")
+    serve_dir = platform_dir
+    title("🎉 Demo 全链路完成！")
 
     if args.serve:
-        _start_dev_server(serve_dir, args.no_browser)
+        run_cli("serve", capture=False)
         return  # never returns (loops until Ctrl+C)
 
     print(f"""
   产物目录:  {serve_dir}
 
-  启动开发服务器（无需 nginx）:
-    python scripts/run_demo.py --serve
+  启动受控本地预览:
+    evo-wiki serve --root {WORKSPACE}
 
-  或在浏览器直接用 file:// 打开:
-    {serve_dir / 'index.html'}
+  浏览器访问:
+    http://127.0.0.1:8080/
 """)
 
-    if not args.no_browser:
-        index_html = serve_dir / "index.html"
-        if index_html.exists():
-            webbrowser.open(str(index_html))
-            ok("已在浏览器中打开 Wiki 首页")
-
-
-def _start_dev_server(serve_dir: Path, no_browser: bool = False) -> None:
-    """Python dev server with SPA routing + LightRAG API proxy (no nginx needed)."""
+def _start_static_server(serve_dir: Path, no_browser: bool = False) -> None:
+    """Serve generated Wiki files on loopback without a LightRAG proxy."""
     import http.server
-    import json as _json
-    import urllib.request as _urllib
-
-    LIGHTRAG_BASE = LIGHTRAG_URL.rstrip("/")
-
-    class _Handler(http.server.SimpleHTTPRequestHandler):
-        def __init__(self, *a, **kw):
-            super().__init__(*a, directory=str(serve_dir), **kw)
-
-        def do_GET(self):
-            # SPA routing: /app → redirect to /app/ so relative paths resolve correctly
-            if self.path == "/app":
-                self.send_response(301)
-                self.send_header("Location", "/app/")
-                self.end_headers()
-                return
-            # SPA fallback: only for paths that don't match real files
-            if self.path.startswith("/app/"):
-                file_path = serve_dir / self.path.lstrip("/")
-                if not file_path.exists():
-                    self.path = "/app/index.html"
-            # API proxy
-            if self.path.startswith("/api/"):
-                return self._proxy("GET")
-            super().do_GET()
-
-        def do_POST(self):
-            if self.path.startswith("/api/"):
-                return self._proxy("POST")
-            self.send_error(404)
-
-        def _proxy(self, method):
-            # Strip /api prefix + keep query string (LightRAG doesn't use /api)
-            raw_path = self.path
-            _, _, qs = raw_path.partition("?")
-            lightrag_path = raw_path[4:] if raw_path.startswith("/api/") else raw_path
-            target = LIGHTRAG_BASE + lightrag_path
-            body = None
-            if method == "POST":
-                length = int(self.headers.get("Content-Length", 0))
-                body = self.rfile.read(length) if length else None
-            req = _urllib.Request(target, data=body, method=method)
-            req.add_header("LIGHTRAG-WORKSPACE", LIGHTRAG_WS)
-            req.add_header("Accept", "application/json")
-            if body:
-                req.add_header("Content-Type", self.headers.get("Content-Type", "application/json"))
-            try:
-                with _urllib.urlopen(req, timeout=120) as resp:
-                    self.send_response(resp.status)
-                    for k, v in resp.getheaders():
-                        if k.lower() not in ("transfer-encoding", "connection"):
-                            self.send_header(k, v)
-                    self.end_headers()
-                    self.wfile.write(resp.read())
-            except Exception as exc:
-                self.send_error(502, f"LightRAG unreachable: {exc}")
-
-        def log_message(self, fmt, *args):
-            print(f"  {self.command} {self.path}")
 
     port = 8080
-    server = http.server.ThreadingHTTPServer(("0.0.0.0", port), _Handler)
+    handler = lambda *args, **kwargs: http.server.SimpleHTTPRequestHandler(  # noqa: E731
+        *args,
+        directory=str(serve_dir),
+        **kwargs,
+    )
+    server = http.server.ThreadingHTTPServer(("127.0.0.1", port), handler)
     print(f"""
 {BOLD}  ✅ 开发服务器已启动！{RESET}
 
   浏览器访问:
-    {BOLD}http://localhost:{port}/{RESET}          ← Wiki
-    {BOLD}http://localhost:{port}/app{RESET}        ← 问答
-    {BOLD}http://localhost:{port}/app#graph{RESET}  ← 图谱
+    {BOLD}http://127.0.0.1:{port}/{RESET}
 
   按 {BOLD}Ctrl+C{RESET} 停止
 """)
     if not no_browser:
-        webbrowser.open(f"http://localhost:{port}/")
+        webbrowser.open(f"http://127.0.0.1:{port}/")
     try:
         server.serve_forever()
     except KeyboardInterrupt:

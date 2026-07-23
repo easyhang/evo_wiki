@@ -174,7 +174,12 @@ def build_lightrag(
             config
         )
     # [MULTI-WS] 将 workspace 传递给客户端，用于 LIGHTRAG-WORKSPACE 请求头。
-    client = LightRAGServiceClient(service["base_url"], headers=service["headers"], timeout=service["timeout_seconds"], workspace=service.get("workspace"))
+    client = LightRAGServiceClient(
+        service["base_url"],
+        headers=service["headers"],
+        timeout=service["timeout_seconds"],
+        workspace=service["workspace"],
+    )
     print(
         f"Embedding batch expectation: requested={service['embedding_batch_size']} "
         f"documents={len(text_docs)}; verify the remote value with `doctor --check-service`",
@@ -932,6 +937,7 @@ def probe_lightrag_service(config: dict[str, Any] | None = None) -> dict[str, An
             service["base_url"],
             headers=service["headers"],
             timeout=timeout,
+            workspace=service["workspace"],
         )
         health = client.request_json("GET", "/health")
     except (LightRAGBuildError, TypeError, ValueError):
@@ -1093,6 +1099,7 @@ def doctor_lightrag(
     config: dict[str, Any] | None = None,
     *,
     check_service: bool = False,
+    require_lightrag: bool = True,
 ) -> dict:
     """检查本地项目；按需对 LightRAG 执行有时限的只读探测。
 
@@ -1112,6 +1119,16 @@ def doctor_lightrag(
         checks.append({"name": "corpus_raw", "status": "ok", "detail": "corpus/raw exists"})
     else:
         checks.append({"name": "corpus_raw", "status": "warning", "detail": "corpus/raw missing; add source files before running lanes"})
+
+    if not require_lightrag:
+        checks.append(
+            {
+                "name": "lightrag",
+                "status": "skipped",
+                "detail": "LightRAG is not required by the wiki-only profile",
+            }
+        )
+        return {"status": "ok", "checks": checks}
 
     # 3. artifacts/lightrag/* 目录（paths.ensure_base_dirs 已在调用前执行）
     artifacts_dirs = [

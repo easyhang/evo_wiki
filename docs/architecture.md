@@ -1,6 +1,6 @@
 # Evo Wiki 架构说明
 
-Evo Wiki 2.0.0 是“Agent 生成内容，CLI 构建平台”的知识平台生成器。
+Evo Wiki 2.0.1 是“Agent 生成内容，CLI 构建平台”的知识平台生成器。
 
 ```mermaid
 flowchart LR
@@ -15,7 +15,7 @@ flowchart LR
     G --> H
 ```
 
-Agent 负责理解语料、组织页面和处理证据缺口；Python 负责可重复、可验证、可恢复的工程动作。
+Agent 负责理解语料、组织页面和处理证据缺口；Python 负责稳定、可验证、可恢复的工程动作。
 默认交付完整 platform，`--target wiki` 是明确的纯文档分支。
 
 ## 1. Workspace 边界
@@ -297,11 +297,11 @@ Evidence Subgraph 是 wheel 内的开发者运行时 Skill，不注册为普通 
 
 ## 11. 支持范围
 
-2.0.0 的部署假设：
+2.0.1 的部署假设：
 
 - 单主机；
 - 本地文件系统；
-- 单 workspace；
+- 每个 Evo Wiki 项目目录绑定一个 workspace；多个项目可共享同一 LightRAG 服务；
 - 外部已有 LightRAG；
 - 生成后退出，独立 `serve` 或 Nginx 负责运行。
 

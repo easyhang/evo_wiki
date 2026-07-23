@@ -34,12 +34,19 @@ Evo Wiki 不负责：
 - 自动删除、批量替换或重建 LightRAG 远端数据；
 - 多域 ACL、OAuth/RBAC、NFS/SMB、多主机或零停机部署。
 
-## 可复现演示模板
+## 获取 XZT 分支
 
-[`examples/WIKI_demo/`](examples/WIKI_demo/) 提供 Evo Wiki 2.0.0 的公开复现模板，
-包括内容契约 v2 配置、通用 Wiki 页面模板、LightRAG 配置示例，以及静态 Wiki 和
-完整问答平台的运行步骤。示例不包含项目私有语料、真实凭据、运行数据库、审核记录、
-日志或生成产物；合作者需要提供自己的语料和 LightRAG 服务。
+当前可直接使用的版本位于 `XZT` 分支。克隆时请明确选择该分支：
+
+```bash
+git clone --branch XZT --single-branch \
+  https://github.com/easyhang/evo_wiki.git
+cd evo_wiki
+```
+
+不使用 Git 时，可以直接下载
+[XZT 分支 ZIP](https://github.com/easyhang/evo_wiki/archive/refs/heads/XZT.zip)，解压后进入
+仓库目录。GitHub 默认 `main` 分支不作为本指南的使用入口。
 
 ## 安装
 
@@ -58,7 +65,7 @@ pip install -e '.[dev]'
 发布包安装：
 
 ```bash
-pip install evo_wiki-2.0.0-py3-none-any.whl
+pip install evo_wiki-2.0.1-py3-none-any.whl
 ```
 
 安装后提供两个等价入口：
@@ -68,7 +75,22 @@ evo-wiki --version
 evo --version
 ```
 
-## 五分钟生成一个本地平台
+## 立即体验内置示例
+
+仓库自带一组公开样例语料和已经整理好的 Wiki 正文。安装后执行：
+
+```bash
+python scripts/run_demo.py --skip-lightrag --serve
+```
+
+该命令不需要模型密钥或 LightRAG，会在仓库已忽略的 `workspace/` 中生成静态 Wiki，并只在
+`http://127.0.0.1:8080/` 提供本地预览。按 `Ctrl+C` 停止服务。
+
+[`examples/WIKI_demo/`](examples/WIKI_demo/) 则提供 Evo Wiki 2.0.1 的自有语料使用模板，
+包括内容契约 v2 配置、通用 Wiki 页面模板、LightRAG 配置示例，以及静态 Wiki 和完整问答
+平台的操作步骤。模板不包含项目私有语料、真实凭据、运行数据库、审核记录、日志或生成产物。
+
+## 使用自己的语料
 
 ### 1. 初始化 workspace
 
@@ -188,6 +210,18 @@ export EVO_WIKI_QUERY_AUDIT_KEY='至少 16 字节的随机值'
 
 若服务使用 Bearer token，则改用 `LIGHTRAG_BEARER_TOKEN`。不要把真实密钥写入配置、仓库、
 SQLite、日志或报告。
+
+一个 Evo Wiki 项目目录只绑定一个 LightRAG workspace。多个项目可以共享同一个服务地址，
+但必须分别使用自己的项目目录和 workspace，例如：
+
+```text
+./project-a/lightrag-config.json → base_url=http://rag:9621, workspace=project_a
+./project-b/lightrag-config.json → base_url=http://rag:9621, workspace=project_b
+```
+
+Evo Wiki 会在健康检查、文档同步、状态查询、问答和图谱请求中发送
+`LIGHTRAG-WORKSPACE`。不要在同一个项目目录中来回切换 workspace；服务必须支持该请求头，
+并能在已认证的健康信息中确认当前 workspace。
 
 可以先单独做只读服务检查：
 
@@ -465,7 +499,7 @@ evo-wiki query \
 发布目录：
 
 ```text
-evo-wiki-2.0.0/
+evo-wiki-2.0.1/
   python/*.whl
   python/*.tar.gz
   skills/evo-wiki/

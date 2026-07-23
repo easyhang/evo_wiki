@@ -163,6 +163,7 @@ def retrieve_evidence_subgraph(
             service["base_url"],
             headers=service["headers"],
             timeout=min(service["timeout_seconds"], settings.timeout_seconds),
+            workspace=service["workspace"],
         )
         _preflight_query(client, service, deadline=deadline)
 

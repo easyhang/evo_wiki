@@ -396,6 +396,7 @@ class TrustedQueryGateway:
                     float(service["timeout_seconds"]),
                     self.settings.request_timeout_seconds,
                 ),
+                workspace=service["workspace"],
             )
             self.service = service
         else:

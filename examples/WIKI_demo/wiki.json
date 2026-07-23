@@ -1,7 +1,7 @@
 {
   "content_contract_version": 2,
   "title": "WIKI_demo 知识平台",
-  "description": "使用自有语料复现 Evo Wiki 2.0.0 的本地知识平台",
+  "description": "使用自有语料配置 Evo Wiki 2.0.1 本地知识平台",
   "brand": {
     "logo_path": null,
     "primary_color": "#2563eb"

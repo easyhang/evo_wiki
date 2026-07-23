@@ -488,6 +488,7 @@ class GenerationService:
                         float(service["timeout_seconds"]),
                         5.0,
                     ),
+                    workspace=service["workspace"],
                 )
                 preflight_lightrag_build(client, service)
                 remote_status = "ready"

@@ -2013,6 +2013,7 @@ class StateReconciler:
             service["base_url"],
             headers=service["headers"],
             timeout=service["timeout_seconds"],
+            workspace=service["workspace"],
         )
         journal: RunJournalWriter | None = None
         if apply:
@@ -2248,6 +2249,7 @@ class ReplacementPlanner:
                 service["base_url"],
                 headers=service["headers"],
                 timeout=service["timeout_seconds"],
+                workspace=service["workspace"],
             )
             health = client.request_json("GET", "/health")
             if not isinstance(health, dict) or health.get("status") != "healthy":
@@ -3902,6 +3904,7 @@ class ReplacementOperationService:
             service["base_url"],
             headers=service["headers"],
             timeout=service["timeout_seconds"],
+            workspace=service["workspace"],
         )
         try:
             health = client.request_json("GET", "/health")

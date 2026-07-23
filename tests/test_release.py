@@ -25,7 +25,7 @@ def test_release_builder_stages_allow_list_only(tmp_path: Path):
     )
 
     assert result.returncode == 0, result.stderr
-    release = tmp_path / "evo-wiki-2.0.0"
+    release = tmp_path / "evo-wiki-2.0.1"
     assert (release / "README.md").is_file()
     assert (release / "LICENSE").is_file()
     assert (release / "CHANGELOG.md").is_file()
@@ -91,7 +91,7 @@ def test_release_builder_stages_allow_list_only(tmp_path: Path):
     )
     assert "韩永仁" not in released_text
     assert "李万华" not in released_text
-    assert (tmp_path / "evo-wiki-2.0.0.zip").is_file()
+    assert (tmp_path / "evo-wiki-2.0.1.zip").is_file()
 
     checksum_lines = (
         release / "SHA256SUMS"

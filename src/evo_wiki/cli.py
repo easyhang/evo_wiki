@@ -1644,10 +1644,15 @@ def cmd_run(args: argparse.Namespace) -> int:
 def cmd_doctor(args: argparse.Namespace) -> int:
     paths, config = load(args.root)
     paths.ensure_base_dirs()
+    require_lightrag = (
+        config.project.get("profile") != "wiki-only"
+        or args.check_service
+    )
     report = doctor_lightrag(
         paths,
         config.project.get("lightrag", {}),
         check_service=args.check_service,
+        require_lightrag=require_lightrag,
     )
     print(json.dumps(report, ensure_ascii=False, indent=2))
     if report["status"] != "failed":

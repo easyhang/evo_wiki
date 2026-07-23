@@ -1544,6 +1544,7 @@ def _remote_summary(config: dict[str, Any]) -> dict[str, Any]:
         service["base_url"],
         headers=service["headers"],
         timeout=min(float(service["timeout_seconds"]), 10),
+        workspace=service["workspace"],
     )
     inventory = client.request_json(
         "POST",

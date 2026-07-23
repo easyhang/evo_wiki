@@ -1,6 +1,6 @@
-# WIKI_demo：Evo Wiki 2.0.0 可复现示例
+# WIKI_demo：Evo Wiki 2.0.1 自有语料模板
 
-这个目录用于复现 Evo Wiki 2.0.0 的构建流程和网页功能。它不包含原项目的
+这个目录用于使用自己的语料配置 Evo Wiki 2.0.1。它不包含原项目的
 九份案件语料、案件 Wiki 正文、生成页面、SQLite、审核记录、日志、凭据或
 LightRAG 运行状态。
 
@@ -26,10 +26,10 @@ pip install -e '.[dev]'
 evo-wiki --version
 ```
 
-当前示例面向 `2.0.0`。如果只下载了本目录，请先克隆对应分支：
+当前模板面向 `2.0.1`。请从 `XZT` 分支克隆完整仓库：
 
 ```bash
-git clone --branch XZT https://github.com/easyhang/evo_wiki.git
+git clone --branch XZT --single-branch https://github.com/easyhang/evo_wiki.git
 cd evo_wiki
 ```
 
@@ -61,7 +61,7 @@ cp -R examples/WIKI_demo/wiki-src-template/. \
 能够访问所有交付页面，实体和概念必须只写入当前语料能够支持的内容。若使用其他
 文件名，还要同步修改各页面 frontmatter 中的 `sources` 路径。
 
-## 3. 只复现静态 Wiki
+## 3. 生成静态 Wiki
 
 此路径不需要 LightRAG：
 
@@ -76,7 +76,7 @@ python3 -m http.server 8080 --directory \
 打开 `http://127.0.0.1:8080/`。`lint-wiki` 在内容契约 v2 下会阻止来源覆盖缺失、
 重复 source basename、重复 graph label 和首页不可达等问题进入交付流程。
 
-## 4. 复现完整问答平台
+## 4. 生成完整问答平台
 
 复制 LightRAG 配置模板，但不要提交生成的实际配置：
 
@@ -92,6 +92,10 @@ export LIGHTRAG_API_KEY='由秘密管理系统提供的值'
 export EVO_WIKI_QUERY_AUDIT_KEY='至少 16 字节的本地随机值'
 ```
 
+每个 Evo Wiki 项目目录固定使用一个 workspace。多个项目可以填写相同的 `base_url`，
+但应使用不同的 workspace；Evo Wiki 会随所有 LightRAG 请求发送
+`LIGHTRAG-WORKSPACE`。
+
 若服务使用 Bearer token，则设置 `LIGHTRAG_BEARER_TOKEN`。不要把任何真实值写进
 JSON、Markdown、SQLite、日志或 Git。
 
@@ -104,7 +108,7 @@ evo-wiki generate --root "$DEMO_ROOT"
 evo-wiki serve --root "$DEMO_ROOT"
 ```
 
-打开 `http://127.0.0.1:18765/app/`。本机模式下会显示问答、图谱、实体和审核入口；
+打开 `http://127.0.0.1:8080/app/`。本机模式下会显示问答、图谱、实体和审核入口；
 回答引用只信任结构化 citations 与生成的 `wiki-registry.json`，不会把模型自由格式的
 References 当作可信链接。
 
@@ -120,5 +124,5 @@ References 当作可信链接。
 
 ## 安全边界
 
-本示例只适合本机单用户复现。不要把 `local_single_user` 网关直接暴露到公网；生产
+本示例只适合本机单用户使用。不要把 `local_single_user` 网关直接暴露到公网；生产
 环境应使用 `production-export`、可信反向代理和独立的身份认证与密钥管理。
