@@ -43,6 +43,10 @@ Evo Wiki 不负责：
 
 ## 安装
 
+Windows 用户请在 WSL2 Ubuntu 中执行本项目的 Linux 开发流程，不要从原生 PowerShell、
+CMD 或 `/mnt/<drive>/...` 目录运行。完整环境准备见
+[Windows + WSL2 开发指南](docs/windows-wsl-development.md)。
+
 开发安装：
 
 ```bash

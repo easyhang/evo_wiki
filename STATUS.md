@@ -11,6 +11,11 @@
   routing policy now defaults to a complete platform; Wiki-only is an explicit
   target. The Skills document the existing SQLite, gateway, replacement,
   audit, notification, and Evidence Subgraph safety contracts.
+- On 2026-07-23, documented the supported Windows development path through
+  WSL2 Ubuntu and Docker Desktop. The README now links to a complete setup,
+  verification, daily-use, and troubleshooting guide; the root Skill stops
+  native Windows execution, rejects `/mnt/<drive>` runtime workspaces, and
+  requires Docker Desktop WSL Integration for full platform and LightRAG work.
 - On 2026-07-20, implemented the Evo Wiki 0.2.0 productization path:
   `init --profile`, `generate`, and local `serve`; strict brand/navigation/query
   configuration; automatic resumable legacy cutover and backup-first v1-v4

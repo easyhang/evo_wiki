@@ -11,6 +11,21 @@ description: |
 Evo Wiki 是“Skill 生成内容，CLI 构建平台”的开发工具。Agent 负责理解语料并维护 Wiki 正文；
 `evo-wiki generate` 负责迁移状态、渲染、LightRAG 同步、查询网关检查和平台导出。
 
+## 平台前置检查
+
+执行任何 Evo Wiki 命令前先确认运行平台：
+
+- 若 `sys.platform == "win32"`、`os.name == "nt"`，或当前只能使用原生 PowerShell/CMD，停止
+  执行并要求用户进入 WSL2 Ubuntu；不要绕过 `JOURNAL_LOCK_UNSUPPORTED` 或关闭日志锁。
+- 在 WSL2 中确认仓库、`.venv`、workspace 和 SQLite 状态位于 Linux 文件系统。路径位于
+  `/mnt/<drive>/...` 时，先迁移到 `/home/<user>/...` 并重新创建 `.venv`，再继续运行。
+- 完整 platform 或 LightRAG 流程开始前，运行 `docker version` 验证 Docker Client 和 Server。
+  在 Windows 主机上还要确认 Docker Desktop 使用 Linux containers，并为当前 Ubuntu 启用
+  WSL Integration。
+
+完整配置和故障排查读取 [Windows + WSL2 开发指南](docs/windows-wsl-development.md)。纯 Wiki
+分支不要求 Docker 或 LightRAG，但在 Windows 主机上仍必须从 WSL2 的 Linux 文件系统运行。
+
 ## 选择交付目标
 
 | 用户目标 | 处理方式 |
