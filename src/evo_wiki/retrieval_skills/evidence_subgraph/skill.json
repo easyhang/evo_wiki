@@ -1,0 +1,26 @@
+{
+  "id": "evidence-subgraph",
+  "version": "1.1.0",
+  "evo_wiki_api": "0.2",
+  "mode": "retrieval_only",
+  "requires": {
+    "graph_subgraph": true,
+    "scoped_evidence_retrieval": true
+  },
+  "depth_policy": {
+    "minimum": 1,
+    "maximum": null
+  },
+  "hard_limits": {
+    "max_nodes": 10000,
+    "max_edges": 50000,
+    "max_content_units": 50000,
+    "top_k": 20,
+    "timeout_seconds": 300
+  },
+  "fallback": [],
+  "security": {
+    "deny_unbounded_global_search": true,
+    "generation_enabled": false
+  }
+}

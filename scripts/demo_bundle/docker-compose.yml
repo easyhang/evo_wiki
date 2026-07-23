@@ -1,0 +1,19 @@
+services:
+  lightrag:
+    image: "{{LIGHTRAG_IMAGE}}"
+    env_file:
+      - .env
+    environment:
+      HOST: "0.0.0.0"
+      PORT: "9621"
+      WORKSPACE: "evo_wiki"
+      WORKING_DIR: "/app/data/rag_storage"
+      INPUT_DIR: "/app/data/inputs"
+      PROMPT_DIR: "/app/data/prompts"
+    ports:
+      - "127.0.0.1:9621:9621"
+    volumes:
+      - ./lightrag-data/rag_storage:/app/data/rag_storage
+      - ./lightrag-data/inputs:/app/data/inputs
+      - ./lightrag-data/prompts:/app/data/prompts
+    restart: unless-stopped

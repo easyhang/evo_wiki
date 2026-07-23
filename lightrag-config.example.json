@@ -1,8 +1,22 @@
 {
-  "_comment": "Copy this file to lightrag-config.json and fill in your LightRAG service details. lightrag-config.json is gitignored. base_url is required before running the LightRAG lane or export-platform.",
+  "_comment": "复制为 lightrag-config.json，并填写真实 LightRAG 服务。base_url 和 workspace 必填；凭据只通过环境变量注入。sync 控制提交后的有界 track 轮询。replacement 具有破坏性，完成 replace-plan 审查前必须保持关闭。embedding.batch_size 只是客户端兼容性期望，不会修改远端配置；请使用 doctor --check-service 核对。",
   "mode": "service",
   "base_url": "http://YOUR_LIGHTRAG_SERVER:9621",
+  "workspace": "evo_wiki",
   "api_key_env": "LIGHTRAG_API_KEY",
   "bearer_token_env": "LIGHTRAG_BEARER_TOKEN",
-  "timeout_seconds": 30
+  "timeout_seconds": 30,
+  "sync": {
+    "poll_interval_seconds": 2,
+    "poll_timeout_seconds": 600
+  },
+  "replacement": {
+    "enabled": false,
+    "maintenance_window_seconds": 600,
+    "absence_confirmations": 2,
+    "auto_compensate": true
+  },
+  "embedding": {
+    "batch_size": 8
+  }
 }
