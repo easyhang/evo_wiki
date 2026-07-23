@@ -12,6 +12,9 @@ build/
 /experiment/
 /examples/
 
+# Local technical report.
+/docs/evo_wiki_optimization_technical_report.md
+
 # Locally copied planning artifact (wiki-graphrag-platform-plan/v3.html).
 design_v3.html
 
