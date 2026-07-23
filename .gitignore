@@ -8,6 +8,10 @@ build/
 *.egg-info/
 .DS_Store
 
+# Local experiments and examples; keep them on disk but out of version control.
+/experiment/
+/examples/
+
 # Locally copied planning artifact (wiki-graphrag-platform-plan/v3.html).
 design_v3.html
 
