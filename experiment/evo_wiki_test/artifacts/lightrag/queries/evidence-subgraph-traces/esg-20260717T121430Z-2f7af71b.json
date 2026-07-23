@@ -1,0 +1,43 @@
+{
+  "schema_version": 1,
+  "run_id": "esg-20260717T121430Z-2f7af71b",
+  "status": "success",
+  "skill_id": "evidence-subgraph",
+  "skill_version": "1.0.0",
+  "query_sha256": "a6693072a13fe704199f8204240122f73c622bebb7151b843cdd50bdd90539a2",
+  "seeds": [
+    "韩永仁",
+    "自动投案"
+  ],
+  "workspace": "evo_wiki",
+  "scope_granularity": "file_to_local_content_unit",
+  "subgraph_sha256": "dd092a642252f6dbfd48d8dc165afb6a3e6077b1bad883f0c2e48c96772ab96b",
+  "subgraph_nodes": 19,
+  "subgraph_edges": 29,
+  "corpus_content_units": 43,
+  "allowed_content_units": 18,
+  "candidate_reduction_ratio": 0.5813953488372092,
+  "evidence_ids": [
+    "unit-34b361df620d3268fd62c80c",
+    "unit-a03ea07152bbef39958abe96",
+    "unit-fe1988afc5e5568d5d7a5680",
+    "unit-f60bc102d4625cdca5f217a9",
+    "unit-d06ad54e315f17f48d1c3f05"
+  ],
+  "evidence_scores": [
+    14.72248106,
+    12.24883432,
+    10.13725048,
+    10.02742955,
+    5.97639261
+  ],
+  "evidence_hashes": [
+    "1e2f0068489a2aa75fc42a143313a6da923598cfe13da1de4f97c579f51bbde5",
+    "16c8f61777eff1dfe514a72947a0b55db9609a246cbae783f92f27f4aecb2e3f",
+    "04eca5c3c8abdfb84727192958029b36c159022625b3585b46dfccaf2d056fa4",
+    "6b7a24caec16eff4d389b8740b46602878c3a925d03d5926a7cc8d693f08104b",
+    "2bb4050c7e0d37e797e8afff66a175f584fdb2852be95035613f576c6bbea34d"
+  ],
+  "failure_code": null,
+  "duration_ms": 130
+}

@@ -1,0 +1,41 @@
+{
+  "status": "success",
+  "generated_at": "2026-07-15T08:32:43Z",
+  "page_count": 1,
+  "html_output": "artifacts/wiki/dist/index.html",
+  "progress": "artifacts/wiki/progress.json",
+  "lint": {
+    "status": "clean",
+    "issue_count": 0,
+    "report": "artifacts/wiki/reports/wiki-health.json"
+  },
+  "llm_wiki_model": {
+    "layout": "index + concepts/entities/sources + audit/log/queries",
+    "final_output": "static_html",
+    "renderer": "evo_wiki.wiki"
+  },
+  "pages": [
+    {
+      "source": "artifacts/wiki/wiki-src/index.md",
+      "output": "artifacts/wiki/dist/index.html",
+      "title": "首页",
+      "type": "index",
+      "word_count": 66,
+      "sources": [],
+      "links": []
+    }
+  ],
+  "health": {
+    "status": "clean",
+    "issue_count": 0,
+    "by_severity": {},
+    "issues": []
+  },
+  "warnings": [
+    {
+      "code": "stub_content",
+      "page": "artifacts/wiki/wiki-src/index.md",
+      "message": "Page still looks like a stub; ask Claude Code to generate complete content."
+    }
+  ]
+}

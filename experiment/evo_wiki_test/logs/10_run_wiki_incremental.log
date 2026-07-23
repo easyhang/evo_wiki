@@ -1,0 +1,4 @@
+# command: evo-wiki run --root experiment/evo_wiki_test --lane wiki after corpus modification
+# utc: 2026-07-15T08:35:06Z
+Wiki lane: success (6 pages)
+# exit_code: 0

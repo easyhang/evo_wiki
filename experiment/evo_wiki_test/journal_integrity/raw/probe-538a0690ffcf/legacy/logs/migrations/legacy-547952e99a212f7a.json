@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "migration_id": "legacy-547952e99a212f7a",
+  "status": "completed",
+  "provenance": "legacy_unverified",
+  "source_sha256": "sha256:547952e99a212f7acabddc089e73ee63b6236723a9073e83492f4bee998fbd6b",
+  "source_bytes": 579,
+  "source_line_count": 4,
+  "target_run_id": "legacy-547952e99a212f7a",
+  "target_journal": "runs/legacy-547952e99a212f7a/events-000001.jsonl",
+  "archive": "legacy/evo-wiki-events.547952e99a212f7a.jsonl",
+  "created_at": "2026-07-17T16:46:13Z",
+  "completed_at": "2026-07-17T16:46:13Z",
+  "archive_sha256": "sha256:547952e99a212f7acabddc089e73ee63b6236723a9073e83492f4bee998fbd6b"
+}

@@ -1,0 +1,30 @@
+# command: evo-wiki lint-wiki with invalid audit shape
+# utc: 2026-07-15T08:34:03Z
+{
+  "status": "issues_found",
+  "issue_count": 3,
+  "by_severity": {
+    "error": 3
+  },
+  "issues": [
+    {
+      "severity": "error",
+      "code": "audit_missing_fields",
+      "message": "Audit file missing fields: author, created, quote, source",
+      "path": "artifacts/wiki/audit/invalid-missing-fields.md"
+    },
+    {
+      "severity": "error",
+      "code": "audit_bad_severity",
+      "message": "Invalid severity: critical",
+      "path": "artifacts/wiki/audit/invalid-missing-fields.md"
+    },
+    {
+      "severity": "error",
+      "code": "audit_bad_status",
+      "message": "Invalid status: waiting",
+      "path": "artifacts/wiki/audit/invalid-missing-fields.md"
+    }
+  ]
+}
+# exit_code: 1

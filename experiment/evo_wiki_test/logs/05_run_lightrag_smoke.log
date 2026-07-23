@@ -1,0 +1,4 @@
+# command: LIGHTRAG_BASE_URL=http://127.0.0.1:9621 evo-wiki run --root experiment/evo_wiki_test --lane lightrag --smoke-query 某案件的判决依据是什么？
+# utc: 2026-07-15T08:32:43Z
+LightRAG lane: success (9 docs)
+# exit_code: 0

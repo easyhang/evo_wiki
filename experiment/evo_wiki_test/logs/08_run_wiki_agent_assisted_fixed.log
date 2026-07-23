@@ -1,0 +1,4 @@
+# command: evo-wiki run --root experiment/evo_wiki_test --lane wiki after fixing test fixture nested wikilink
+# utc: 2026-07-15T08:34:33Z
+Wiki lane: success (6 pages)
+# exit_code: 0

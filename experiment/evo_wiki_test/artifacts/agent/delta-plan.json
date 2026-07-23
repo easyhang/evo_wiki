@@ -1,0 +1,31 @@
+{
+  "run_type": "full_or_no_change",
+  "selected_lanes": [
+    "wiki",
+    "lightrag"
+  ],
+  "reason": "generate_platform",
+  "wiki": {
+    "action": "run"
+  },
+  "lightrag": {
+    "action": "run"
+  },
+  "change_set": {
+    "added": [],
+    "modified": [],
+    "deleted": []
+  },
+  "change_sets": {
+    "wiki": {
+      "added": [],
+      "modified": [],
+      "deleted": []
+    },
+    "lightrag": {
+      "added": [],
+      "modified": [],
+      "deleted": []
+    }
+  }
+}

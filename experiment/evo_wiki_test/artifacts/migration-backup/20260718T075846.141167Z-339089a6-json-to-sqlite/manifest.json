@@ -1,0 +1,42 @@
+{
+  "schema_version": 1,
+  "created_at": "2026-07-18T07:58:46Z",
+  "source_fingerprint": "sha256:5a0b38a713c3594fcd7ad9efd53a1cd407602d82355609d35af79c00a63a9776",
+  "files": [
+    {
+      "path": "artifacts/corpus-state.json",
+      "sha256": "sha256:4c09390a1ac5f8f49ce7f06ad3d5bce107c0d188a9ec91a38618cf961016d658",
+      "size_bytes": 2447
+    },
+    {
+      "path": "artifacts/lightrag/state/corpus-state.json",
+      "sha256": "sha256:4c09390a1ac5f8f49ce7f06ad3d5bce107c0d188a9ec91a38618cf961016d658",
+      "size_bytes": 2447
+    },
+    {
+      "path": "artifacts/lightrag/state/lightrag-import-ledger.json",
+      "sha256": "sha256:992d36e8cb6ad95609e7eb760087ce14e525434e3b828f92ea56ef990c9e6c6e",
+      "size_bytes": 3899
+    },
+    {
+      "path": "artifacts/manifest.json",
+      "sha256": "sha256:9f83a323cda11aa3c92a0fd3a435b3e003690f31c43134b02aa1caeaba5a904c",
+      "size_bytes": 1239
+    },
+    {
+      "path": "artifacts/wiki/progress.json",
+      "sha256": "sha256:b379390a6829e31d4c2a4cc909ec133ef22a1920379afc68d75a31b0e5f55e0b",
+      "size_bytes": 4516
+    },
+    {
+      "path": "artifacts/wiki/state/corpus-state.json",
+      "sha256": "sha256:34451375f57022e427c2d337574d1d5a69ebf03531fc0399dd3d33eaad58467c",
+      "size_bytes": 2447
+    },
+    {
+      "path": "project.json",
+      "sha256": "sha256:8d209e7e9fa7d8cf6d9dff73fe03bcf0f9d40b0bb5e53e03d6fd34b7931e3688",
+      "size_bytes": 414
+    }
+  ]
+}

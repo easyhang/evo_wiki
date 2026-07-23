@@ -1,0 +1,3 @@
+# command: POST /documents/reprocess_failed after EMBEDDING_BATCH_NUM=8
+# utc: 2026-07-15T08:53:47Z
+{"status":"reprocessing_started","message":"Reprocessing of failed documents has been initiated in background. Documents retain their original track_id.","track_id":""}

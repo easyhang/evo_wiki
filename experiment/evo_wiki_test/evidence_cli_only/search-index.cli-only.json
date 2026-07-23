@@ -1,0 +1,8 @@
+[
+  {
+    "title": "首页",
+    "type": "index",
+    "path": "index.html",
+    "text": "首页 Wiki 入口页。由 Claude Code 生成内容，Python 负责渲染为 HTML。 <!-- evo:agent-content:start -- 本页是 Evo wiki 生成的占位页。请让 Claude Code 基于 corpus 原始语料补全内容；页面中不需要单独标明来源。 <!-- evo:agent-content:end --"
+  }
+]

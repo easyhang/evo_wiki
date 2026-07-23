@@ -1,0 +1,116 @@
+{
+  "documents": {
+    "corpus__raw__legal_docs__100_李万华故意杀人、盗窃案.txt": {
+      "binding_id": "binding-47b35d13ff4182d2694353451370f1b9",
+      "source_path": "corpus/raw/legal_docs/100_李万华故意杀人、盗窃案.txt",
+      "sha256": "sha256:94180acce1bb48148c5106437ce1f6026cf993e2da0ff5056733cfea6999de15",
+      "service_track_id": "insert_20260717_075849_52e509c8",
+      "remote_status": "PROCESSED",
+      "action_gate": "OPEN",
+      "gate_reason": null,
+      "chunk_count": 3,
+      "submitted_at": "2026-07-17T07:58:49Z",
+      "processed_at": "2026-07-20T03:17:41Z"
+    },
+    "corpus__raw__legal_docs__100_李某故意杀人、故意伤害案.txt": {
+      "binding_id": "binding-d2abcb5d2c83ddfd115403d2f0dbc895",
+      "source_path": "corpus/raw/legal_docs/100_李某故意杀人、故意伤害案.txt",
+      "sha256": "sha256:4ffe9b04533740706a7b4dd87ae2cc78f92c3bb0b690bbf4f82ef4860437b3cf",
+      "service_track_id": "insert_20260717_075849_dbab2899",
+      "remote_status": "PROCESSED",
+      "action_gate": "OPEN",
+      "gate_reason": null,
+      "chunk_count": 4,
+      "submitted_at": "2026-07-17T07:58:49Z",
+      "processed_at": "2026-07-20T03:17:41Z"
+    },
+    "corpus__raw__legal_docs__100_钟兆桂、伍斯云等故意伤害案.txt": {
+      "binding_id": "binding-3f22d22b6aa2801b5def961619472d8c",
+      "source_path": "corpus/raw/legal_docs/100_钟兆桂、伍斯云等故意伤害案.txt",
+      "sha256": "sha256:bf3017396179b2e77529fe1101e48bdd42b17018717b9660433c4929859ff9fb",
+      "service_track_id": "insert_20260717_075849_a2c86868",
+      "remote_status": "PROCESSED",
+      "action_gate": "OPEN",
+      "gate_reason": null,
+      "chunk_count": 3,
+      "submitted_at": "2026-07-17T07:58:49Z",
+      "processed_at": "2026-07-20T03:17:41Z"
+    },
+    "corpus__raw__legal_docs__102_韩永仁故意伤害案.txt": {
+      "binding_id": "binding-21b914ff0db63ccc732612d4261a9e6a",
+      "source_path": "corpus/raw/legal_docs/102_韩永仁故意伤害案.txt",
+      "sha256": "sha256:1893df16aa993e4cf77e9cd96d21defea17cd630359aa4d96b6f614114baff63",
+      "service_track_id": "insert_20260717_075849_2d29f6c8",
+      "remote_status": "PROCESSED",
+      "action_gate": "OPEN",
+      "gate_reason": null,
+      "chunk_count": 4,
+      "submitted_at": "2026-07-17T07:58:49Z",
+      "processed_at": "2026-07-20T03:17:41Z"
+    },
+    "corpus__raw__legal_docs__103_吴某强奸、故意伤害案_转自TXT.txt": {
+      "binding_id": "binding-1b84eaaeaf563f2197f7415f27439e7e",
+      "source_path": "corpus/raw/legal_docs/103_吴某强奸、故意伤害案_转自TXT.txt",
+      "sha256": "sha256:49371805ed97a7e97d8f69c8d5f2af6cea984f85e6b559415213e5621b0f68c4",
+      "service_track_id": "insert_20260717_075849_82e5d0f3",
+      "remote_status": "PROCESSED",
+      "action_gate": "OPEN",
+      "gate_reason": null,
+      "chunk_count": 3,
+      "submitted_at": "2026-07-17T07:58:49Z",
+      "processed_at": "2026-07-20T03:17:41Z"
+    },
+    "corpus__raw__legal_docs__105_李英俊故意伤害案_转自TXT.txt": {
+      "binding_id": "binding-ab9fabfe533fc0b0502ba8d1c7b97433",
+      "source_path": "corpus/raw/legal_docs/105_李英俊故意伤害案_转自TXT.txt",
+      "sha256": "sha256:2249719c8a6f45efb3a3315e3e4894ae46093807d79e40a2d799dffd5bfada10",
+      "service_track_id": "insert_20260717_075849_48ad18b8",
+      "remote_status": "PROCESSED",
+      "action_gate": "OPEN",
+      "gate_reason": null,
+      "chunk_count": 3,
+      "submitted_at": "2026-07-17T07:58:49Z",
+      "processed_at": "2026-07-20T03:17:41Z"
+    },
+    "corpus__raw__legal_docs__105_李虎、李善东等故意伤害案_转自TXT.txt": {
+      "binding_id": "binding-e786377ade5575d3f75ead560f098183",
+      "source_path": "corpus/raw/legal_docs/105_李虎、李善东等故意伤害案_转自TXT.txt",
+      "sha256": "sha256:88359ba3eba2a6d37e432352493128852186d2d7d02612e8b72d0ce65ae1535f",
+      "service_track_id": "insert_20260717_075849_c49b137a",
+      "remote_status": "PROCESSED",
+      "action_gate": "OPEN",
+      "gate_reason": null,
+      "chunk_count": 4,
+      "submitted_at": "2026-07-17T07:58:49Z",
+      "processed_at": "2026-07-20T03:17:41Z"
+    },
+    "corpus__raw__legal_docs__108_庞易浑等故意伤害案_转自TXT.txt": {
+      "binding_id": "binding-6006fe8f4c409a91009dc73887121ad1",
+      "source_path": "corpus/raw/legal_docs/108_庞易浑等故意伤害案_转自TXT.txt",
+      "sha256": "sha256:7dc36526dad11aced5c989d528e07352f0f915a83a95823c144c69f8bc93870f",
+      "service_track_id": "insert_20260717_075849_8faa0baa",
+      "remote_status": "PROCESSED",
+      "action_gate": "OPEN",
+      "gate_reason": null,
+      "chunk_count": 5,
+      "submitted_at": "2026-07-17T07:58:49Z",
+      "processed_at": "2026-07-20T03:17:41Z"
+    },
+    "corpus__raw__legal_docs__108_曹显深、杨永旭、张剑等故意伤害案_转自TXT.txt": {
+      "binding_id": "binding-8d4636a8c7e19a41e4c14ab9f90ef0a6",
+      "source_path": "corpus/raw/legal_docs/108_曹显深、杨永旭、张剑等故意伤害案_转自TXT.txt",
+      "sha256": "sha256:e24524397b3e3cb87fbfe4902c482ee590c99305402b31f5b18eff541f0cac02",
+      "service_track_id": "insert_20260717_075849_54313c6f",
+      "remote_status": "PROCESSED",
+      "action_gate": "OPEN",
+      "gate_reason": null,
+      "chunk_count": 5,
+      "submitted_at": "2026-07-17T07:58:49Z",
+      "processed_at": "2026-07-20T03:17:41Z"
+    }
+  },
+  "exported_from": "sqlite",
+  "schema_version": 1,
+  "db_commit_seq": 49,
+  "generated_at": "2026-07-20T03:36:59Z"
+}

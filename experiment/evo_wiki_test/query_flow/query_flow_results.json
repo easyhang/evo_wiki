@@ -1,0 +1,229 @@
+{
+  "experiment_id": "20260717T054505Z",
+  "service": {
+    "base_url": "http://127.0.0.1:9621",
+    "health_before": {
+      "status": "healthy",
+      "pipeline_busy": false,
+      "pipeline_active": false,
+      "pipeline_scanning": false,
+      "core_version": "1.5.4",
+      "api_version": "0313",
+      "workspace_empty": true,
+      "embedding_batch_num": 8,
+      "query_queue": {
+        "queued": 0,
+        "running": 0,
+        "failed_total": 0
+      }
+    },
+    "health_after": {
+      "status": "healthy",
+      "pipeline_busy": false,
+      "pipeline_active": false,
+      "pipeline_scanning": false,
+      "core_version": "1.5.4",
+      "api_version": "0313",
+      "workspace_empty": true,
+      "embedding_batch_num": 8,
+      "query_queue": {
+        "queued": 0,
+        "running": 0,
+        "failed_total": 0
+      }
+    }
+  },
+  "stages": [
+    {
+      "name": "preflight_health",
+      "status": "warning",
+      "http_status": 200,
+      "duration_ms": 45,
+      "failure_code": "WORKSPACE_UNKNOWN",
+      "response_shape": {
+        "status": "healthy",
+        "pipeline_busy": false,
+        "pipeline_active": false,
+        "pipeline_scanning": false,
+        "core_version": "1.5.4",
+        "api_version": "0313",
+        "workspace_empty": true,
+        "embedding_batch_num": 8,
+        "query_queue": {
+          "queued": 0,
+          "running": 0,
+          "failed_total": 0
+        }
+      }
+    },
+    {
+      "name": "preflight_openapi",
+      "status": "passed",
+      "http_status": 200,
+      "duration_ms": 18,
+      "failure_code": null,
+      "response_shape": {
+        "query_supported": true,
+        "query_modes": [
+          "bypass",
+          "global",
+          "hybrid",
+          "local",
+          "mix",
+          "naive"
+        ],
+        "supports_mix": true,
+        "supports_hybrid": true,
+        "supports_include_references": true,
+        "supports_include_chunk_content": true,
+        "query_properties": [
+          "chunk_top_k",
+          "conversation_history",
+          "enable_rerank",
+          "hl_keywords",
+          "include_chunk_content",
+          "include_references",
+          "ll_keywords",
+          "max_entity_tokens",
+          "max_relation_tokens",
+          "max_total_tokens",
+          "mode",
+          "only_need_context",
+          "only_need_prompt",
+          "query",
+          "response_type",
+          "stream",
+          "top_k",
+          "user_prompt"
+        ]
+      }
+    },
+    {
+      "name": "context_retrieval",
+      "status": "passed",
+      "http_status": 200,
+      "duration_ms": 1780,
+      "failure_code": null,
+      "response_shape": {
+        "top_level_keys": [
+          "references",
+          "response"
+        ],
+        "response_chars": 18613,
+        "context_chars": null,
+        "reference_count": 2,
+        "non_empty_chunk_count": 5,
+        "reference_files": [
+          "102_韩永仁故意伤害案.txt",
+          "103_吴某强奸、故意伤害案_转自TXT.txt"
+        ],
+        "has_entities": false,
+        "has_relations": false,
+        "has_chunks": false,
+        "contains_no_context": false
+      },
+      "request_shape": {
+        "method": "POST",
+        "path": "/query",
+        "mode": "mix",
+        "only_need_context": true,
+        "include_references": true,
+        "include_chunk_content": true,
+        "query_chars": 13
+      }
+    },
+    {
+      "name": "answer_generation",
+      "status": "passed",
+      "http_status": 200,
+      "duration_ms": 14075,
+      "failure_code": null,
+      "response_shape": {
+        "top_level_keys": [
+          "references",
+          "response"
+        ],
+        "response_chars": 1071,
+        "context_chars": null,
+        "reference_count": 2,
+        "non_empty_chunk_count": 5,
+        "reference_files": [
+          "102_韩永仁故意伤害案.txt",
+          "103_吴某强奸、故意伤害案_转自TXT.txt"
+        ],
+        "has_entities": false,
+        "has_relations": false,
+        "has_chunks": false,
+        "contains_no_context": false
+      },
+      "request_shape": {
+        "method": "POST",
+        "path": "/query",
+        "mode": "hybrid",
+        "include_references": true,
+        "include_chunk_content": true,
+        "query_chars": 13
+      }
+    },
+    {
+      "name": "negative_control",
+      "status": "warning",
+      "http_status": 200,
+      "duration_ms": 7756,
+      "failure_code": "REFUSAL_WITH_IRRELEVANT_REFERENCES",
+      "response_shape": {
+        "top_level_keys": [
+          "references",
+          "response"
+        ],
+        "response_chars": 559,
+        "context_chars": null,
+        "reference_count": 5,
+        "non_empty_chunk_count": 5,
+        "reference_files": [
+          "108_曹显深、杨永旭、张剑等故意伤害案_转自TXT.txt",
+          "102_韩永仁故意伤害案.txt",
+          "100_钟兆桂、伍斯云等故意伤害案.txt",
+          "105_李虎、李善东等故意伤害案_转自TXT.txt",
+          "100_李万华故意杀人、盗窃案.txt"
+        ],
+        "has_entities": false,
+        "has_relations": false,
+        "has_chunks": false,
+        "contains_no_context": false
+      },
+      "request_shape": {
+        "method": "POST",
+        "path": "/query",
+        "mode": "mix",
+        "include_references": true,
+        "include_chunk_content": true,
+        "query_chars": 28
+      }
+    },
+    {
+      "name": "postflight_health",
+      "status": "warning",
+      "http_status": 200,
+      "duration_ms": 21,
+      "failure_code": "WORKSPACE_UNKNOWN",
+      "response_shape": {
+        "status": "healthy",
+        "pipeline_busy": false,
+        "pipeline_active": false,
+        "pipeline_scanning": false,
+        "core_version": "1.5.4",
+        "api_version": "0313",
+        "workspace_empty": true,
+        "embedding_batch_num": 8,
+        "query_queue": {
+          "queued": 0,
+          "running": 0,
+          "failed_total": 0
+        }
+      }
+    }
+  ],
+  "overall_status": "warning",
+  "generated_at": "2026-07-17T05:45:29.508801Z"
+}

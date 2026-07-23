@@ -1,0 +1,45 @@
+{
+  "project": "evo-wiki-project",
+  "generated_at": "2026-07-15T09:00:44Z",
+  "selected_lanes": [
+    "lightrag"
+  ],
+  "corpus_hash": "sha256:db16796192fade48ea6f6fd60efa4cc63222d5a662018a9544e37f06e9026f86",
+  "change_set": {
+    "added": [],
+    "modified": [],
+    "deleted": []
+  },
+  "lanes": {
+    "wiki": {
+      "status": "success",
+      "generated_at": "2026-07-15T08:35:06Z",
+      "output": "artifacts/wiki/dist/index.html",
+      "page_count": 6,
+      "progress": "artifacts/wiki/progress.json",
+      "lint_report": "artifacts/wiki/reports/wiki-health.json",
+      "health_status": "clean",
+      "health_issue_count": 0,
+      "from_previous_run": true
+    },
+    "lightrag": {
+      "status": "success",
+      "service": {
+        "mode": "service",
+        "base_url": "http://127.0.0.1:9621",
+        "api_key_env": "LIGHTRAG_API_KEY",
+        "bearer_token_env": "LIGHTRAG_BEARER_TOKEN",
+        "auth": {
+          "api_key_configured": false,
+          "bearer_token_configured": false
+        },
+        "embedding": {
+          "batch_size": 8,
+          "max_supported_batch_size": 10
+        }
+      },
+      "document_count": 9
+    }
+  },
+  "next_action": "connect_agent_to_lightrag_or_run_more_smoke_tests"
+}

@@ -1,0 +1,4 @@
+# command: restore experiment corpus to version1 for post-fix adapter smoke
+# utc: 2026-07-15T09:00:22Z
+1893df16aa993e4cf77e9cd96d21defea17cd630359aa4d96b6f614114baff63  experiment/evo_wiki_test/version1/102_韩永仁故意伤害案.txt
+1893df16aa993e4cf77e9cd96d21defea17cd630359aa4d96b6f614114baff63  experiment/evo_wiki_test/corpus/raw/legal_docs/102_韩永仁故意伤害案.txt

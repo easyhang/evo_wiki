@@ -1,0 +1,75 @@
+{
+  "schema_version": 1,
+  "operation": "generate",
+  "generation_id": "generate-5de28582bf8c40d9aea36499561d3635",
+  "generated_at": "2026-07-20T03:36:59Z",
+  "status": "success",
+  "mode": "apply",
+  "target": "platform",
+  "workspace_mutated": true,
+  "remote_mutated": false,
+  "state": {
+    "status": "already_current",
+    "backend_before": "sqlite",
+    "backend_after": "sqlite",
+    "database_schema_before": 4,
+    "database_schema_after": 4,
+    "backup_id": null,
+    "legacy_backup_created": false
+  },
+  "preflight": {
+    "profile": "local-platform",
+    "corpus_file_count": 9,
+    "stub_page_count": 0,
+    "deleted_document_count": 0,
+    "lightrag": "ready",
+    "query_gateway_mode": "shadow"
+  },
+  "steps": [
+    {
+      "name": "preflight",
+      "status": "succeeded"
+    },
+    {
+      "name": "state_migration",
+      "status": "already_current",
+      "database_schema_before": 4,
+      "database_schema_after": 4,
+      "backup_id": null
+    },
+    {
+      "name": "state_verify",
+      "status": "succeeded",
+      "database_schema_version": 4,
+      "overall_status": "WARN"
+    },
+    {
+      "name": "wiki",
+      "status": "success"
+    },
+    {
+      "name": "lightrag",
+      "status": "success",
+      "remote_mutated": false
+    },
+    {
+      "name": "query_gateway",
+      "status": "succeeded"
+    },
+    {
+      "name": "platform_export",
+      "status": "succeeded"
+    }
+  ],
+  "artifacts": {
+    "wiki": "/Users/vincentxing/Downloads/Open_WIKI/evo_wiki/experiment/evo_wiki_test/artifacts/wiki/dist/index.html",
+    "platform": "/Users/vincentxing/Downloads/Open_WIKI/evo_wiki/experiment/evo_wiki_test/artifacts/platform",
+    "report": "/Users/vincentxing/Downloads/Open_WIKI/evo_wiki/experiment/evo_wiki_test/artifacts/generation/report.json"
+  },
+  "gateway": {
+    "status": "ready",
+    "mode": "shadow"
+  },
+  "error_code": null,
+  "next_command": "evo-wiki serve --root /Users/vincentxing/Downloads/Open_WIKI/evo_wiki/experiment/evo_wiki_test"
+}

@@ -1,0 +1,11 @@
+{
+  "_comment": "Copy this file to lightrag-config.json and fill in your LightRAG service details. lightrag-config.json is gitignored. base_url is required before running the LightRAG lane or export-platform.",
+  "mode": "service",
+  "base_url": "http://YOUR_LIGHTRAG_SERVER:9621",
+  "api_key_env": "LIGHTRAG_API_KEY",
+  "bearer_token_env": "LIGHTRAG_BEARER_TOKEN",
+  "timeout_seconds": 30,
+  "embedding": {
+    "batch_size": 8
+  }
+}

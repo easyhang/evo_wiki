@@ -1,0 +1,4 @@
+# command: LightRAG track status for 102_韩永仁故意伤害案 initial insert
+# utc: 2026-07-15T08:35:49Z
+{"track_id":"insert_20260715_083244_c6597d74","documents":[{"id":"doc-d20eacadf736b4311206bfd0f392736b","content_summary":"韩永仁故意伤害案\n— — “明知他人报案而在现场等待”情形的具体认定\n\n\n一、基本案情\n被告人韩永仁，男，1944年3月7日出生，工人。2013年7月31日因涉 嫌犯故意伤害罪被逮捕。\n吉林省长春市人民检察院以被告人韩永仁犯故意伤害罪，向长春市中 级人民法院提起公诉。\n长春市中级人民法院经审理查明：被告人韩永仁与被害人逯永君均系 长春市雪月山饭店的锅炉工，二人轮流值班，因韩永仁到雪月山饭店工作的 时间早于逯永君，涉及锅炉房的事情饭店人员就交代给韩永仁，但未明确二 人之间存在管理关系。2013年7...","content_length":4173,"status":"pending","created_at":"2026-07-15T08:32:44.062015+00:00","updated_at":"2026-07-15T08:32:44.062019+00:00","track_id":"insert_20260715_083244_c6597d74","chunks_count":null,"error_msg":null,"metadata":{"process_options":"F"},"file_path":"102_韩永仁故意伤害案.txt"}],"total_count":1,"status_summary":{"DocStatus.PENDING":1}}
+# exit_code: 0

@@ -1,0 +1,4 @@
+# command: LIGHTRAG_BASE_URL=http://127.0.0.1:9621 evo-wiki run --root experiment/evo_wiki_test --lane lightrag after corpus modification
+# utc: 2026-07-15T08:35:06Z
+LightRAG lane: failed (LightRAG service POST /documents/text failed with HTTP 409: {"detail":"Document storage already contains '102_韩永仁故意伤害案.txt' (Status: pending). Delete the existing record before re-inserting."})
+# exit_code: 2

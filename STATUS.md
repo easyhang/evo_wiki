@@ -36,6 +36,23 @@
 
 ## Current Optimization Progress
 
+- On 2026-07-23, added a reproducible sanitized legal-demo bundle builder.
+  It packages the 9-case corpus, 22 Wiki source pages, generated platform,
+  source snapshots, a cleaned schema-v5 SQLite database, 11 required
+  LightRAG graph/vector/KV index files, a 2.0.1 wheel, pinned multi-architecture
+  LightRAG Compose configuration, checksums, licenses, and macOS/Linux
+  start/check/stop scripts. The builder excludes credentials, `.env`, query
+  and audit history, notifications, run journals, backups, machine paths,
+  WAL/SHM/locks, and the LightRAG LLM response cache, and refuses to overwrite
+  an existing target. The focused bundle/release tests pass (`3 passed`) and
+  the full suite passes (`247 passed`). A clean temporary extraction installed
+  the wheel, passed `doctor` and gateway readiness, served Wiki/App pages,
+  returned a 33-node/56-edge graph from an isolated cache-free LightRAG
+  container, and answered the live legal smoke query with a grounded
+  1,504-character answer and five structured citations. Model credentials
+  remain recipient-supplied and were not copied into the bundle. The final
+  ignored release is `dist/evo-wiki-legal-demo-2.0.1.zip` (5.5 MiB), SHA-256
+  `18af5b23b430c996a212758afbc26868213ece7dd19257ed40b6edbf8e648a12`.
 - On 2026-07-23, prepared the 2.0.1 direct-use patch for the `XZT` branch.
   README now provides explicit branch clone/ZIP entry points, a bundled
   wiki-only preview, and an own-corpus Agent workflow. Existing LightRAG

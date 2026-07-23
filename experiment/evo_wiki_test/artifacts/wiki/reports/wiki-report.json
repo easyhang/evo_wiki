@@ -1,0 +1,120 @@
+{
+  "status": "success",
+  "generated_at": "2026-07-20T03:36:59Z",
+  "page_count": 6,
+  "html_output": "artifacts/wiki/dist/index.html",
+  "progress": "artifacts/wiki/progress.json",
+  "lint": {
+    "status": "clean",
+    "issue_count": 0,
+    "report": "artifacts/wiki/reports/wiki-health.json"
+  },
+  "llm_wiki_model": {
+    "layout": "index + concepts/entities/sources + audit/log/queries",
+    "final_output": "static_html",
+    "renderer": "evo_wiki.wiki"
+  },
+  "pages": [
+    {
+      "source": "artifacts/wiki/wiki-src/concepts/intentional-injury.md",
+      "output": "artifacts/wiki/dist/concepts/intentional-injury.html",
+      "title": "故意伤害罪",
+      "type": "concept",
+      "word_count": 74,
+      "sources": [
+        "corpus/raw/legal_docs/102_韩永仁故意伤害案.txt"
+      ],
+      "links": [
+        "自首",
+        "韩永仁",
+        "韩永仁故意伤害案"
+      ]
+    },
+    {
+      "source": "artifacts/wiki/wiki-src/concepts/surrender.md",
+      "output": "artifacts/wiki/dist/concepts/surrender.html",
+      "title": "自首",
+      "type": "concept",
+      "word_count": 90,
+      "sources": [
+        "corpus/raw/legal_docs/102_韩永仁故意伤害案.txt"
+      ],
+      "links": [
+        "故意伤害罪",
+        "自动投案",
+        "韩永仁"
+      ]
+    },
+    {
+      "source": "artifacts/wiki/wiki-src/concepts/voluntary-surrender.md",
+      "output": "artifacts/wiki/dist/concepts/voluntary-surrender.html",
+      "title": "自动投案",
+      "type": "concept",
+      "word_count": 113,
+      "sources": [
+        "corpus/raw/legal_docs/102_韩永仁故意伤害案.txt"
+      ],
+      "links": [
+        "自首",
+        "韩永仁故意伤害案"
+      ]
+    },
+    {
+      "source": "artifacts/wiki/wiki-src/entities/han-yongren.md",
+      "output": "artifacts/wiki/dist/entities/han-yongren.html",
+      "title": "韩永仁",
+      "type": "entity",
+      "word_count": 103,
+      "sources": [
+        "corpus/raw/legal_docs/102_韩永仁故意伤害案.txt"
+      ],
+      "links": [
+        "故意伤害罪",
+        "自动投案",
+        "自首",
+        "韩永仁故意伤害案"
+      ]
+    },
+    {
+      "source": "artifacts/wiki/wiki-src/index.md",
+      "output": "artifacts/wiki/dist/index.html",
+      "title": "法律案例测试 Wiki",
+      "type": "index",
+      "word_count": 82,
+      "sources": [
+        "corpus/raw/legal_docs/102_韩永仁故意伤害案.txt"
+      ],
+      "links": [
+        "故意伤害罪",
+        "自动投案",
+        "自首",
+        "韩永仁",
+        "韩永仁故意伤害案"
+      ]
+    },
+    {
+      "source": "artifacts/wiki/wiki-src/sources/han-yongren-case.md",
+      "output": "artifacts/wiki/dist/sources/han-yongren-case.html",
+      "title": "韩永仁故意伤害案",
+      "type": "source",
+      "word_count": 3569,
+      "sources": [
+        "corpus/raw/legal_docs/102_韩永仁故意伤害案.txt"
+      ],
+      "links": [
+        "故意伤害罪",
+        "自动投案",
+        "自首",
+        "韩永仁",
+        "韩永仁故意伤害案"
+      ]
+    }
+  ],
+  "health": {
+    "status": "clean",
+    "issue_count": 0,
+    "by_severity": {},
+    "issues": []
+  },
+  "warnings": []
+}

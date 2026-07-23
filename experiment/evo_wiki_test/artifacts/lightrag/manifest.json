@@ -1,0 +1,25 @@
+{
+  "status": "success",
+  "generated_at": "2026-07-20T03:36:59Z",
+  "service": {
+    "mode": "service",
+    "base_url": "http://127.0.0.1:9621",
+    "workspace": "evo_wiki",
+    "api_key_env": "LIGHTRAG_API_KEY",
+    "bearer_token_env": "LIGHTRAG_BEARER_TOKEN",
+    "auth": {
+      "api_key_configured": false,
+      "bearer_token_configured": false
+    },
+    "embedding": {
+      "batch_size": 8,
+      "max_supported_batch_size": 10,
+      "scope": "client_expectation_only"
+    },
+    "sync": {
+      "poll_interval_seconds": 2.0,
+      "poll_timeout_seconds": 600.0
+    }
+  },
+  "document_count": 9
+}

@@ -1,0 +1,25 @@
+{
+  "schema_version": 1,
+  "run_id": "esg-20260717T121420Z-e345bc56",
+  "status": "failed",
+  "skill_id": "evidence-subgraph",
+  "skill_version": "1.0.0",
+  "query_sha256": "a6693072a13fe704199f8204240122f73c622bebb7151b843cdd50bdd90539a2",
+  "seeds": [
+    "韩永仁",
+    "自动投案"
+  ],
+  "workspace": "evo_wiki",
+  "scope_granularity": "file_to_local_content_unit",
+  "subgraph_sha256": "980c94d3fb8895232b50f8c3662af411a0b1f99ad17149494f5a5c1f17b59939",
+  "subgraph_nodes": 48,
+  "subgraph_edges": 73,
+  "corpus_content_units": 43,
+  "allowed_content_units": 43,
+  "candidate_reduction_ratio": 0.0,
+  "evidence_ids": [],
+  "evidence_scores": [],
+  "evidence_hashes": [],
+  "failure_code": "SCOPE_NOT_REDUCED",
+  "duration_ms": 228
+}

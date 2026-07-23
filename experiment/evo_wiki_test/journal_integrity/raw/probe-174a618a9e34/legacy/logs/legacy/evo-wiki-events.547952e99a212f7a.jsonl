@@ -1,0 +1,4 @@
+{"event": "run_started", "status": "running", "selected_lanes": ["wiki"], "change_set": {"added": ["private-source-a.md"]}, "api_key": "SYNTHETIC_SECRET_DO_NOT_COPY"}
+{"event": "run_finished", "status": "success", "selected_lanes": ["wiki"], "change_set": {"added": []}, "exit_code": 0}
+{"event": "run_started", "status": "running", "selected_lanes": ["lightrag"], "change_set": {"added": ["private-source-b.md"]}, "query": "SYNTHETIC_SECRET_DO_NOT_COPY"}
+{"event": "run_finished", "status": "failed", "selected_lanes": ["lightrag"], "change_set": {"added": []}, "exit_code": 2}

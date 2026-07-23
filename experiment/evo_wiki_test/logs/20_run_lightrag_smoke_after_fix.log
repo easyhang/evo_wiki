@@ -1,0 +1,4 @@
+Embedding batch: current=8 total=9
+LightRAG lane: success (9 docs)
+# command: LIGHTRAG_BASE_URL=http://127.0.0.1:9621 evo-wiki run --root experiment/evo_wiki_test --lane lightrag --smoke-query 韩永仁案中为什么认定自首？
+# exit_code: 0

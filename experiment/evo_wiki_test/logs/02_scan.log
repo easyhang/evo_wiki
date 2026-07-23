@@ -1,0 +1,21 @@
+# command: evo-wiki scan --root experiment/evo_wiki_test
+# utc: 2026-07-15T08:32:43Z
+{
+  "file_count": 9,
+  "change_set": {
+    "added": [
+      "corpus/raw/legal_docs/100_李万华故意杀人、盗窃案.txt",
+      "corpus/raw/legal_docs/100_李某故意杀人、故意伤害案.txt",
+      "corpus/raw/legal_docs/100_钟兆桂、伍斯云等故意伤害案.txt",
+      "corpus/raw/legal_docs/102_韩永仁故意伤害案.txt",
+      "corpus/raw/legal_docs/103_吴某强奸、故意伤害案_转自TXT.txt",
+      "corpus/raw/legal_docs/105_李英俊故意伤害案_转自TXT.txt",
+      "corpus/raw/legal_docs/105_李虎、李善东等故意伤害案_转自TXT.txt",
+      "corpus/raw/legal_docs/108_庞易浑等故意伤害案_转自TXT.txt",
+      "corpus/raw/legal_docs/108_曹显深、杨永旭、张剑等故意伤害案_转自TXT.txt"
+    ],
+    "modified": [],
+    "deleted": []
+  }
+}
+# exit_code: 0

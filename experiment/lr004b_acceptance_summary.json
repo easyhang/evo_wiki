@@ -1,0 +1,47 @@
+{
+  "schema_version": 1,
+  "accepted_at": "2026-07-18T10:04:00Z",
+  "workspace": "lr004b_acceptance",
+  "isolation": {
+    "service_port": 9622,
+    "storage_directory_separate": true,
+    "production_workspace_mutated": false
+  },
+  "successful_replace": {
+    "phase": "COMPLETED",
+    "effect_certainty": "KNOWN",
+    "delete_attempts": 1,
+    "submit_attempts": 1,
+    "backup_verification": "PASS",
+    "maintenance_elapsed_seconds": 14.766002
+  },
+  "compensated_replace": {
+    "phase": "ROLLED_BACK",
+    "effect_certainty": "KNOWN",
+    "delete_attempts": 2,
+    "submit_attempts": 2,
+    "backup_verification": "PASS",
+    "maintenance_elapsed_seconds": 17.4501
+  },
+  "final_state": {
+    "sqlite_verify": "PASS",
+    "database_schema_version": 2,
+    "state_commit_seq": 26,
+    "remote_document_count": 1,
+    "remote_processed_count": 1,
+    "remote_total_chunks": 1,
+    "pipeline_idle": true,
+    "revision_status_counts": {
+      "ACTIVE": 1,
+      "REJECTED": 1,
+      "SUPERSEDED": 1
+    }
+  },
+  "redaction": {
+    "source_text_included": false,
+    "query_text_included": false,
+    "answer_text_included": false,
+    "credentials_included": false,
+    "raw_remote_response_included": false
+  }
+}

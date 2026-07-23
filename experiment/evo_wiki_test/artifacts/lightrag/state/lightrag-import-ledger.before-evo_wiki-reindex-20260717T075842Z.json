@@ -1,0 +1,75 @@
+{
+  "documents": {
+    "corpus__raw__legal_docs__100_李万华故意杀人、盗窃案.txt": {
+      "source_path": "corpus/raw/legal_docs/100_李万华故意杀人、盗窃案.txt",
+      "sha256": "sha256:94180acce1bb48148c5106437ce1f6026cf993e2da0ff5056733cfea6999de15",
+      "submitted_at": "2026-07-15T08:32:44Z",
+      "service_track_id": "insert_20260715_083244_a878f72c"
+    },
+    "corpus__raw__legal_docs__100_李某故意杀人、故意伤害案.txt": {
+      "source_path": "corpus/raw/legal_docs/100_李某故意杀人、故意伤害案.txt",
+      "sha256": "sha256:4ffe9b04533740706a7b4dd87ae2cc78f92c3bb0b690bbf4f82ef4860437b3cf",
+      "submitted_at": "2026-07-15T08:32:44Z",
+      "service_track_id": "insert_20260715_083244_e1f72594"
+    },
+    "corpus__raw__legal_docs__100_钟兆桂、伍斯云等故意伤害案.txt": {
+      "source_path": "corpus/raw/legal_docs/100_钟兆桂、伍斯云等故意伤害案.txt",
+      "sha256": "sha256:bf3017396179b2e77529fe1101e48bdd42b17018717b9660433c4929859ff9fb",
+      "submitted_at": "2026-07-15T08:32:44Z",
+      "service_track_id": "insert_20260715_083244_08f39fb2"
+    },
+    "corpus__raw__legal_docs__102_韩永仁故意伤害案.txt": {
+      "source_path": "corpus/raw/legal_docs/102_韩永仁故意伤害案.txt",
+      "sha256": "sha256:1893df16aa993e4cf77e9cd96d21defea17cd630359aa4d96b6f614114baff63",
+      "submitted_at": "2026-07-15T08:32:44Z",
+      "service_track_id": "insert_20260715_083244_c6597d74"
+    },
+    "corpus__raw__legal_docs__103_吴某强奸、故意伤害案_转自TXT.txt": {
+      "source_path": "corpus/raw/legal_docs/103_吴某强奸、故意伤害案_转自TXT.txt",
+      "sha256": "sha256:49371805ed97a7e97d8f69c8d5f2af6cea984f85e6b559415213e5621b0f68c4",
+      "submitted_at": "2026-07-15T08:32:44Z",
+      "service_track_id": "insert_20260715_083244_a4b0a202"
+    },
+    "corpus__raw__legal_docs__105_李英俊故意伤害案_转自TXT.txt": {
+      "source_path": "corpus/raw/legal_docs/105_李英俊故意伤害案_转自TXT.txt",
+      "sha256": "sha256:2249719c8a6f45efb3a3315e3e4894ae46093807d79e40a2d799dffd5bfada10",
+      "submitted_at": "2026-07-15T08:32:44Z",
+      "service_track_id": "insert_20260715_083244_482a4181"
+    },
+    "corpus__raw__legal_docs__105_李虎、李善东等故意伤害案_转自TXT.txt": {
+      "source_path": "corpus/raw/legal_docs/105_李虎、李善东等故意伤害案_转自TXT.txt",
+      "sha256": "sha256:88359ba3eba2a6d37e432352493128852186d2d7d02612e8b72d0ce65ae1535f",
+      "submitted_at": "2026-07-15T08:32:44Z",
+      "service_track_id": "insert_20260715_083244_45977eb7"
+    },
+    "corpus__raw__legal_docs__108_庞易浑等故意伤害案_转自TXT.txt": {
+      "source_path": "corpus/raw/legal_docs/108_庞易浑等故意伤害案_转自TXT.txt",
+      "sha256": "sha256:7dc36526dad11aced5c989d528e07352f0f915a83a95823c144c69f8bc93870f",
+      "submitted_at": "2026-07-15T08:32:45Z",
+      "service_track_id": "insert_20260715_083245_c02b6812"
+    },
+    "corpus__raw__legal_docs__108_曹显深、杨永旭、张剑等故意伤害案_转自TXT.txt": {
+      "source_path": "corpus/raw/legal_docs/108_曹显深、杨永旭、张剑等故意伤害案_转自TXT.txt",
+      "sha256": "sha256:e24524397b3e3cb87fbfe4902c482ee590c99305402b31f5b18eff541f0cac02",
+      "submitted_at": "2026-07-15T08:32:45Z",
+      "service_track_id": "insert_20260715_083245_23687d5d"
+    }
+  },
+  "updated_at": "2026-07-17T07:58:18Z",
+  "service": {
+    "mode": "service",
+    "base_url": "http://127.0.0.1:9621",
+    "workspace": "evo_wiki",
+    "api_key_env": "LIGHTRAG_API_KEY",
+    "bearer_token_env": "LIGHTRAG_BEARER_TOKEN",
+    "auth": {
+      "api_key_configured": false,
+      "bearer_token_configured": false
+    },
+    "embedding": {
+      "batch_size": 8,
+      "max_supported_batch_size": 10,
+      "scope": "client_expectation_only"
+    }
+  }
+}

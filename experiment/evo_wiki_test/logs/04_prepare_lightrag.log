@@ -1,0 +1,9 @@
+# command: evo-wiki prepare-lightrag --root experiment/evo_wiki_test
+# utc: 2026-07-15T08:32:43Z
+{
+  "status": "prepared",
+  "generated_at": "2026-07-15T08:32:43Z",
+  "document_count": 9,
+  "documents_jsonl": "artifacts/lightrag/input/documents.jsonl"
+}
+# exit_code: 0

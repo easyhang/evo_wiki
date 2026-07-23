@@ -1,0 +1,5 @@
+# command: evo-wiki init --root experiment/evo_wiki_test
+# utc: 2026-07-15T08:32:29Z
+Initialized Evo wiki project at /Users/vincentxing/Downloads/Open_WIKI/evo_wiki/experiment/evo_wiki_test
+Next: put source files under the runtime corpus/raw/ directory (default: workspace/corpus/raw/), let Claude Code compile wiki-src/{concepts,entities,sources}, then run render-wiki for HTML.
+# exit_code: 0

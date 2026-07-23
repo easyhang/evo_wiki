@@ -1,0 +1,40 @@
+{
+  "project": "evo-wiki-project",
+  "default_lane": "wiki_first",
+  "corpus_dir": "corpus",
+  "artifacts_dir": "artifacts",
+  "lightrag": {
+    "mode": "service",
+    "base_url": "",
+    "api_key_env": "LIGHTRAG_API_KEY",
+    "bearer_token_env": "LIGHTRAG_BEARER_TOKEN",
+    "input_file": "artifacts/lightrag/input/documents.jsonl",
+    "timeout_seconds": 30,
+    "embedding": {
+      "batch_size": 8
+    }
+  },
+  "state": {
+    "backend": "sqlite",
+    "database": "artifacts/state/evo_wiki.sqlite3",
+    "busy_timeout_seconds": 15
+  },
+  "query_gateway": {
+    "mode": "shadow",
+    "listen": "127.0.0.1:8765",
+    "max_body_bytes": 32768,
+    "max_response_bytes": 4194304,
+    "max_in_flight": 16,
+    "request_timeout_seconds": 45,
+    "drain_timeout_seconds": 30,
+    "audit_required": true,
+    "audit_hmac_key_env": "EVO_WIKI_QUERY_AUDIT_KEY",
+    "evidence_policy": "provenance_critical_fact_v1"
+  },
+  "security": {
+    "auth_mode": "local_single_user",
+    "principal_header": "X-Evo-Principal",
+    "default_domain": "default",
+    "fail_closed": true
+  }
+}

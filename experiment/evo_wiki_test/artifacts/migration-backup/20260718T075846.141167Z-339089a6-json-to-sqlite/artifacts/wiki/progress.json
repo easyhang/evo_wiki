@@ -1,0 +1,170 @@
+{
+  "schema_version": 1,
+  "lane": "wiki",
+  "status": "success",
+  "completed_pages": [
+    {
+      "source": "artifacts/wiki/wiki-src/concepts/intentional-injury.md",
+      "output": "artifacts/wiki/dist/concepts/intentional-injury.html",
+      "title": "故意伤害罪",
+      "type": "concept"
+    },
+    {
+      "source": "artifacts/wiki/wiki-src/concepts/surrender.md",
+      "output": "artifacts/wiki/dist/concepts/surrender.html",
+      "title": "自首",
+      "type": "concept"
+    },
+    {
+      "source": "artifacts/wiki/wiki-src/concepts/voluntary-surrender.md",
+      "output": "artifacts/wiki/dist/concepts/voluntary-surrender.html",
+      "title": "自动投案",
+      "type": "concept"
+    },
+    {
+      "source": "artifacts/wiki/wiki-src/entities/han-yongren.md",
+      "output": "artifacts/wiki/dist/entities/han-yongren.html",
+      "title": "韩永仁",
+      "type": "entity"
+    },
+    {
+      "source": "artifacts/wiki/wiki-src/index.md",
+      "output": "artifacts/wiki/dist/index.html",
+      "title": "法律案例测试 Wiki",
+      "type": "index"
+    },
+    {
+      "source": "artifacts/wiki/wiki-src/sources/han-yongren-case.md",
+      "output": "artifacts/wiki/dist/sources/han-yongren-case.html",
+      "title": "韩永仁故意伤害案",
+      "type": "source"
+    }
+  ],
+  "failed_pages": [],
+  "resume_hint": "Inspect completed_pages and current_phase; rerun evo-wiki render-wiki after fixing the failed phase.",
+  "started_at": "2026-07-17T07:06:25Z",
+  "updated_at": "2026-07-17T07:06:25Z",
+  "current_phase": "complete",
+  "phases": [
+    {
+      "phase": "start",
+      "status": "running",
+      "at": "2026-07-17T07:06:25Z"
+    },
+    {
+      "phase": "ensure_wiki_stub",
+      "status": "running",
+      "at": "2026-07-17T07:06:25Z"
+    },
+    {
+      "phase": "prepare_dist",
+      "status": "running",
+      "at": "2026-07-17T07:06:25Z"
+    },
+    {
+      "phase": "scan_wiki_src",
+      "status": "running",
+      "at": "2026-07-17T07:06:25Z",
+      "total_pages": 6
+    },
+    {
+      "phase": "build_link_map",
+      "status": "running",
+      "at": "2026-07-17T07:06:25Z",
+      "link_alias_count": 13
+    },
+    {
+      "phase": "render_pages",
+      "status": "running",
+      "at": "2026-07-17T07:06:25Z",
+      "rendered_pages": 1,
+      "total_pages": 6
+    },
+    {
+      "phase": "render_pages",
+      "status": "running",
+      "at": "2026-07-17T07:06:25Z",
+      "rendered_pages": 2,
+      "total_pages": 6
+    },
+    {
+      "phase": "render_pages",
+      "status": "running",
+      "at": "2026-07-17T07:06:25Z",
+      "rendered_pages": 3,
+      "total_pages": 6
+    },
+    {
+      "phase": "render_pages",
+      "status": "running",
+      "at": "2026-07-17T07:06:25Z",
+      "rendered_pages": 4,
+      "total_pages": 6
+    },
+    {
+      "phase": "render_pages",
+      "status": "running",
+      "at": "2026-07-17T07:06:25Z",
+      "rendered_pages": 5,
+      "total_pages": 6
+    },
+    {
+      "phase": "render_pages",
+      "status": "running",
+      "at": "2026-07-17T07:06:25Z",
+      "rendered_pages": 6,
+      "total_pages": 6
+    },
+    {
+      "phase": "write_assets",
+      "status": "running",
+      "at": "2026-07-17T07:06:25Z"
+    },
+    {
+      "phase": "write_spa_assets",
+      "status": "running",
+      "at": "2026-07-17T07:06:25Z"
+    },
+    {
+      "phase": "write_search_index",
+      "status": "running",
+      "at": "2026-07-17T07:06:25Z",
+      "search_entries": 6
+    },
+    {
+      "phase": "write_dependency_graph",
+      "status": "running",
+      "at": "2026-07-17T07:06:25Z"
+    },
+    {
+      "phase": "lint_wiki",
+      "status": "running",
+      "at": "2026-07-17T07:06:25Z",
+      "lint_status": "clean",
+      "lint_issue_count": 0
+    },
+    {
+      "phase": "complete",
+      "status": "success",
+      "at": "2026-07-17T07:06:25Z",
+      "report": "artifacts/wiki/reports/wiki-report.json",
+      "lint_status": "clean",
+      "lint_issue_count": 0
+    }
+  ],
+  "total_pages": 6,
+  "source_files": [
+    "artifacts/wiki/wiki-src/concepts/intentional-injury.md",
+    "artifacts/wiki/wiki-src/concepts/surrender.md",
+    "artifacts/wiki/wiki-src/concepts/voluntary-surrender.md",
+    "artifacts/wiki/wiki-src/entities/han-yongren.md",
+    "artifacts/wiki/wiki-src/index.md",
+    "artifacts/wiki/wiki-src/sources/han-yongren-case.md"
+  ],
+  "link_alias_count": 13,
+  "rendered_pages": 6,
+  "search_entries": 6,
+  "lint_status": "clean",
+  "lint_issue_count": 0,
+  "report": "artifacts/wiki/reports/wiki-report.json"
+}

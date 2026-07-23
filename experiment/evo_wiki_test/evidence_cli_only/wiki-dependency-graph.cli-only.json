@@ -1,0 +1,9 @@
+{
+  "artifacts/wiki/wiki-src/index.md": {
+    "links": [],
+    "resolved_links": {},
+    "output": "artifacts/wiki/dist/index.html",
+    "type": "index",
+    "sources": []
+  }
+}

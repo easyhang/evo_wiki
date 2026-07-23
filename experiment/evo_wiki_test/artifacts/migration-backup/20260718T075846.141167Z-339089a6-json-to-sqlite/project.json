@@ -1,0 +1,17 @@
+{
+  "project": "evo-wiki-project",
+  "default_lane": "wiki_first",
+  "corpus_dir": "corpus",
+  "artifacts_dir": "artifacts",
+  "lightrag": {
+    "mode": "service",
+    "base_url": "",
+    "api_key_env": "LIGHTRAG_API_KEY",
+    "bearer_token_env": "LIGHTRAG_BEARER_TOKEN",
+    "input_file": "artifacts/lightrag/input/documents.jsonl",
+    "timeout_seconds": 30,
+    "embedding": {
+      "batch_size": 8
+    }
+  }
+}

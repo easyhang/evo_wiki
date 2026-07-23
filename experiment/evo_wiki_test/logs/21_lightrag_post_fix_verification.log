@@ -1,0 +1,45 @@
+# command: verify LightRAG runtime health, track statuses, smoke response
+# utc: 2026-07-15T09:01:05Z
+health={"status": "healthy", "pipeline_busy": false, "embedding_binding": "openai", "embedding_model": "text-embedding-v3", "embedding_batch_num": 8}
+track_statuses=[{"source_path": "corpus/raw/legal_docs/100_李万华故意杀人、盗窃案.txt", "track_id": "insert_20260715_083244_a878f72c", "status": "processed", "chunks_count": 3, "content_length": 3768}, {"source_path": "corpus/raw/legal_docs/100_李某故意杀人、故意伤害案.txt", "track_id": "insert_20260715_083244_e1f72594", "status": "processed", "chunks_count": 4, "content_length": 5070}, {"source_path": "corpus/raw/legal_docs/100_钟兆桂、伍斯云等故意伤害案.txt", "track_id": "insert_20260715_083244_08f39fb2", "status": "processed", "chunks_count": 3, "content_length": 3566}, {"source_path": "corpus/raw/legal_docs/102_韩永仁故意伤害案.txt", "track_id": "insert_20260715_083244_c6597d74", "status": "processed", "chunks_count": 4, "content_length": 4173}, {"source_path": "corpus/raw/legal_docs/103_吴某强奸、故意伤害案_转自TXT.txt", "track_id": "insert_20260715_083244_a4b0a202", "status": "processed", "chunks_count": 3, "content_length": 3373}, {"source_path": "corpus/raw/legal_docs/105_李英俊故意伤害案_转自TXT.txt", "track_id": "insert_20260715_083244_482a4181", "status": "processed", "chunks_count": 3, "content_length": 3603}, {"source_path": "corpus/raw/legal_docs/105_李虎、李善东等故意伤害案_转自TXT.txt", "track_id": "insert_20260715_083244_45977eb7", "status": "processed", "chunks_count": 4, "content_length": 5041}, {"source_path": "corpus/raw/legal_docs/108_庞易浑等故意伤害案_转自TXT.txt", "track_id": "insert_20260715_083245_c02b6812", "status": "processed", "chunks_count": 5, "content_length": 6448}, {"source_path": "corpus/raw/legal_docs/108_曹显深、杨永旭、张剑等故意伤害案_转自TXT.txt", "track_id": "insert_20260715_083245_23687d5d", "status": "processed", "chunks_count": 5, "content_length": 5476}]
+all_processed=False
+all_chunks_present=True
+smoke={"query": "韩永仁案中为什么认定自首？", "answer_prefix": "在韩永仁故意伤害案中，法院认定其构成自首，主要基于对“自动投案”这一法定要件的实质化、合理化解释，严格遵循《中华人民共和国刑法》第六十七条第一款及最高人民法院《关于处理自首和立功具体应用法律若干问题的解释》（以下简称《解释》）和《关于处理自首和立功若干问题的意见》（以下简称《意见》）的相关规定。其认定逻辑可从以下三个核心层面展开：\n\n**一、“明知他人报案”的主观认知具有合理性与现实性**  \n尽管韩永仁并未亲眼目睹他人拨打“110”，但根据案发时的客观情境，其具备充分依据推断司法机关即将介入。首先，被害人逯永君被刺后持刀追撵至饭店大厅倒地，尖刀被值班服务员金岚当场捡起，犯罪事实已完全暴露于公", "answer_has_no_context": false, "references_count": 5, "reference_files": ["108_庞易浑等故意伤害案_转自TXT.txt", "102_韩永仁故意伤害案.txt", "103_吴某强奸、故意伤害案_转自TXT.txt", "105_李虎、李善东等故意伤害案_转自TXT.txt", "100_钟兆桂、伍斯云等故意伤害案.txt"]}
+
+# status_counts
+{"status_counts":{"pending":0,"parsing":0,"analyzing":0,"processing":0,"preprocessed":0,"processed":9,"failed":0,"all":9}}
+# container_log_batch_and_errors
+INFO: [] chunks flush: embedding 7 vectors in 1 batch(es) (batch_num=8)
+INFO: Embedding func: 8 new workers initialized (Timeouts: Func: 30s, Worker: 60s, Health Check: 75s)
+INFO: [] entities flush: embedding 38 vectors in 5 batch(es) (batch_num=8)
+INFO: [] relationships flush: embedding 41 vectors in 6 batch(es) (batch_num=8)
+INFO: [] chunks flush: embedding 3 vectors in 1 batch(es) (batch_num=8)
+INFO: Completed processing file 1/9: 100_李万华故意杀人、盗窃案.txt
+INFO: [] entities flush: embedding 54 vectors in 7 batch(es) (batch_num=8)
+INFO: [] relationships flush: embedding 51 vectors in 7 batch(es) (batch_num=8)
+INFO: [] chunks flush: embedding 4 vectors in 1 batch(es) (batch_num=8)
+INFO: Completed processing file 2/9: 100_李某故意杀人、故意伤害案.txt
+INFO: [] entities flush: embedding 33 vectors in 5 batch(es) (batch_num=8)
+INFO: [] relationships flush: embedding 45 vectors in 6 batch(es) (batch_num=8)
+INFO: [] chunks flush: embedding 3 vectors in 1 batch(es) (batch_num=8)
+INFO: Completed processing file 3/9: 100_钟兆桂、伍斯云等故意伤害案.txt
+INFO: [] entities flush: embedding 43 vectors in 6 batch(es) (batch_num=8)
+INFO: [] relationships flush: embedding 44 vectors in 6 batch(es) (batch_num=8)
+INFO: [] chunks flush: embedding 3 vectors in 1 batch(es) (batch_num=8)
+INFO: Completed processing file 4/9: 102_韩永仁故意伤害案.txt
+INFO: [] entities flush: embedding 57 vectors in 8 batch(es) (batch_num=8)
+INFO: [] chunks flush: embedding 4 vectors in 1 batch(es) (batch_num=8)
+INFO: [] relationships flush: embedding 63 vectors in 8 batch(es) (batch_num=8)
+INFO: Completed processing file 6/9: 105_李英俊故意伤害案_转自TXT.txt
+INFO: [] relationships flush: embedding 2 vectors in 1 batch(es) (batch_num=8)
+INFO: [] chunks flush: embedding 5 vectors in 1 batch(es) (batch_num=8)
+INFO: Completed processing file 5/9: 103_吴某强奸、故意伤害案_转自TXT.txt
+INFO: [] entities flush: embedding 46 vectors in 6 batch(es) (batch_num=8)
+INFO: [] relationships flush: embedding 58 vectors in 8 batch(es) (batch_num=8)
+INFO: [] chunks flush: embedding 5 vectors in 1 batch(es) (batch_num=8)
+INFO: Completed processing file 7/9: 105_李虎、李善东等故意伤害案_转自TXT.txt
+INFO: [] entities flush: embedding 87 vectors in 11 batch(es) (batch_num=8)
+INFO: [] relationships flush: embedding 124 vectors in 16 batch(es) (batch_num=8)
+INFO: Completed processing file 9/9: 108_曹显深、杨永旭、张剑等故意伤害案_转自TXT.txt
+INFO: [] relationships flush: embedding 6 vectors in 1 batch(es) (batch_num=8)
+INFO: Completed processing file 8/9: 108_庞易浑等故意伤害案_转自TXT.txt

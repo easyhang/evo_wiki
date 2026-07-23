@@ -1,0 +1,112 @@
+{
+  "artifacts/wiki/wiki-src/concepts/intentional-injury.md": {
+    "links": [
+      "自首",
+      "韩永仁",
+      "韩永仁故意伤害案"
+    ],
+    "resolved_links": {
+      "自首": "concepts/surrender.html",
+      "韩永仁": "entities/han-yongren.html",
+      "韩永仁故意伤害案": "sources/han-yongren-case.html"
+    },
+    "output": "artifacts/wiki/dist/concepts/intentional-injury.html",
+    "type": "concept",
+    "sources": [
+      "corpus/raw/legal_docs/102_韩永仁故意伤害案.txt"
+    ]
+  },
+  "artifacts/wiki/wiki-src/concepts/surrender.md": {
+    "links": [
+      "故意伤害罪",
+      "自动投案",
+      "韩永仁"
+    ],
+    "resolved_links": {
+      "故意伤害罪": "concepts/intentional-injury.html",
+      "自动投案": "concepts/voluntary-surrender.html",
+      "韩永仁": "entities/han-yongren.html"
+    },
+    "output": "artifacts/wiki/dist/concepts/surrender.html",
+    "type": "concept",
+    "sources": [
+      "corpus/raw/legal_docs/102_韩永仁故意伤害案.txt"
+    ]
+  },
+  "artifacts/wiki/wiki-src/concepts/voluntary-surrender.md": {
+    "links": [
+      "自首",
+      "韩永仁故意伤害案"
+    ],
+    "resolved_links": {
+      "自首": "concepts/surrender.html",
+      "韩永仁故意伤害案": "sources/han-yongren-case.html"
+    },
+    "output": "artifacts/wiki/dist/concepts/voluntary-surrender.html",
+    "type": "concept",
+    "sources": [
+      "corpus/raw/legal_docs/102_韩永仁故意伤害案.txt"
+    ]
+  },
+  "artifacts/wiki/wiki-src/entities/han-yongren.md": {
+    "links": [
+      "故意伤害罪",
+      "自动投案",
+      "自首",
+      "韩永仁故意伤害案"
+    ],
+    "resolved_links": {
+      "故意伤害罪": "concepts/intentional-injury.html",
+      "自动投案": "concepts/voluntary-surrender.html",
+      "自首": "concepts/surrender.html",
+      "韩永仁故意伤害案": "sources/han-yongren-case.html"
+    },
+    "output": "artifacts/wiki/dist/entities/han-yongren.html",
+    "type": "entity",
+    "sources": [
+      "corpus/raw/legal_docs/102_韩永仁故意伤害案.txt"
+    ]
+  },
+  "artifacts/wiki/wiki-src/index.md": {
+    "links": [
+      "故意伤害罪",
+      "自动投案",
+      "自首",
+      "韩永仁",
+      "韩永仁故意伤害案"
+    ],
+    "resolved_links": {
+      "故意伤害罪": "concepts/intentional-injury.html",
+      "自动投案": "concepts/voluntary-surrender.html",
+      "自首": "concepts/surrender.html",
+      "韩永仁": "entities/han-yongren.html",
+      "韩永仁故意伤害案": "sources/han-yongren-case.html"
+    },
+    "output": "artifacts/wiki/dist/index.html",
+    "type": "index",
+    "sources": [
+      "corpus/raw/legal_docs/102_韩永仁故意伤害案.txt"
+    ]
+  },
+  "artifacts/wiki/wiki-src/sources/han-yongren-case.md": {
+    "links": [
+      "故意伤害罪",
+      "自动投案",
+      "自首",
+      "韩永仁",
+      "韩永仁故意伤害案"
+    ],
+    "resolved_links": {
+      "故意伤害罪": "concepts/intentional-injury.html",
+      "自动投案": "concepts/voluntary-surrender.html",
+      "自首": "concepts/surrender.html",
+      "韩永仁": "entities/han-yongren.html",
+      "韩永仁故意伤害案": "sources/han-yongren-case.html"
+    },
+    "output": "artifacts/wiki/dist/sources/han-yongren-case.html",
+    "type": "source",
+    "sources": [
+      "corpus/raw/legal_docs/102_韩永仁故意伤害案.txt"
+    ]
+  }
+}

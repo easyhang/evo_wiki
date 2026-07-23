@@ -1,0 +1,48 @@
+{
+  "title": "Evo Wiki",
+  "description": "Agent-generated LLM Wiki rendered to static HTML",
+  "structure": {
+    "index": "index.md",
+    "concepts": "concepts/",
+    "entities": "entities/",
+    "sources": "sources/",
+    "audit": "audit/",
+    "log": "log/",
+    "queries": "outputs/queries/"
+  },
+  "page_targets": {
+    "concept": {
+      "target_words": "400-1200",
+      "hard_max_words": 1200
+    },
+    "entity": {
+      "target_words": "200-500",
+      "hard_max_words": 500
+    },
+    "source": {
+      "target_words": "摘要 150-400 + 原文全文",
+      "hard_max_words": null
+    }
+  },
+  "query_defaults": {
+    "history_turns": 3
+  },
+  "graph_defaults": {
+    "max_depth": 2,
+    "max_nodes": 50,
+    "popular_limit": 12
+  },
+  "pages": [
+    {
+      "path": "index.md",
+      "title": "首页",
+      "type": "index",
+      "description": "Wiki 入口页。由 Claude Code 生成内容，Python 负责渲染为 HTML。",
+      "sources": []
+    }
+  ],
+  "protected_markers": {
+    "start": "<!-- evo:user-edit:start -->",
+    "end": "<!-- evo:user-edit:end -->"
+  }
+}

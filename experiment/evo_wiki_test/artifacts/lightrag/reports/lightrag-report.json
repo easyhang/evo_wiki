@@ -1,0 +1,51 @@
+{
+  "status": "success",
+  "generated_at": "2026-07-20T03:36:59Z",
+  "input": {
+    "status": "prepared",
+    "generated_at": "2026-07-20T03:36:59Z",
+    "document_count": 9,
+    "documents_jsonl": "artifacts/lightrag/input/documents.jsonl"
+  },
+  "imported": [],
+  "skipped_unchanged": [
+    "corpus/raw/legal_docs/100_李万华故意杀人、盗窃案.txt",
+    "corpus/raw/legal_docs/100_李某故意杀人、故意伤害案.txt",
+    "corpus/raw/legal_docs/100_钟兆桂、伍斯云等故意伤害案.txt",
+    "corpus/raw/legal_docs/102_韩永仁故意伤害案.txt",
+    "corpus/raw/legal_docs/103_吴某强奸、故意伤害案_转自TXT.txt",
+    "corpus/raw/legal_docs/105_李英俊故意伤害案_转自TXT.txt",
+    "corpus/raw/legal_docs/105_李虎、李善东等故意伤害案_转自TXT.txt",
+    "corpus/raw/legal_docs/108_庞易浑等故意伤害案_转自TXT.txt",
+    "corpus/raw/legal_docs/108_曹显深、杨永旭、张剑等故意伤害案_转自TXT.txt"
+  ],
+  "requires_rebuild": false,
+  "deleted_pending_rebuild": [],
+  "error": null,
+  "service": {
+    "mode": "service",
+    "base_url": "http://127.0.0.1:9621",
+    "workspace": "evo_wiki",
+    "api_key_env": "LIGHTRAG_API_KEY",
+    "bearer_token_env": "LIGHTRAG_BEARER_TOKEN",
+    "auth": {
+      "api_key_configured": false,
+      "bearer_token_configured": false
+    },
+    "embedding": {
+      "batch_size": 8,
+      "max_supported_batch_size": 10,
+      "scope": "client_expectation_only"
+    },
+    "sync": {
+      "poll_interval_seconds": 2.0,
+      "poll_timeout_seconds": 600.0
+    }
+  },
+  "service_track_ids": [],
+  "track_status": [],
+  "smoke_test": {
+    "query": null,
+    "ran": false
+  }
+}

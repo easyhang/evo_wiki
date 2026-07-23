@@ -1,0 +1,10 @@
+{
+  "status": "success",
+  "generated_at": "2026-07-20T03:36:59Z",
+  "output": "artifacts/wiki/dist/index.html",
+  "page_count": 6,
+  "progress": "artifacts/wiki/progress.json",
+  "lint_report": "artifacts/wiki/reports/wiki-health.json",
+  "health_status": "clean",
+  "health_issue_count": 0
+}
